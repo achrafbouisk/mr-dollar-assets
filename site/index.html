@@ -77,7 +77,7 @@
       .catch(e => { console.warn('ask failed', e); return T().oops; });
     const filler = pickFiller(q);
     const fillerDone = filler ? sayAndWait(filler) : Promise.resolve();   // instant human reaction
-    const answer = await answerP;
+    const answer = stripStockOpener(await answerP);
     prefetch(answer);                    // his voice for the answer is generated while the filler plays
     await fillerDone;
     busy = false; setBtn('idle');
@@ -99,6 +99,12 @@
     ];
     for (const [re, out] of map) { const m = s.match(re); if (m) return typeof out === 'function' ? out(m[0]) : out; }
     return null;
+  }
+  // "Très bonne question, …" / "Great question. …" at the very start → removed (the rest is kept)
+  function stripStockOpener(a) {
+    const re = /^\s*(ah,?\s*|oh,?\s*|alors,?\s*)?(c['’]est\s+)?(une\s+)?(tr[eè]s\s+|excellente?\s+|bonne\s+|belle\s+|vraiment\s+)*(bonne\s+|excellente\s+|belle\s+)?question(\s+(tr[eè]s\s+)?(int[ée]ressante|pertinente|importante))?(,?\s*vraiment)?\s*[.!,:;…—-]+\s*|^\s*(that['’]s\s+)?(a\s+)?(very\s+|really\s+)?(great|good|excellent|interesting)\s+question\s*[.!,:;…—-]+\s*/i;
+    const out = String(a || '').replace(re, '');
+    return out && out !== a ? out.charAt(0).toUpperCase() + out.slice(1) : a;
   }
   async function sayAndWait(text) {
     lastFiller = text;
@@ -187,10 +193,11 @@
 
   // ---------- instant reactions ("fillers"), recorded once in his voice and cached by the CDN ----------
   const FILLERS = {
-    fr: { big: ['Très bonne question…', 'Ah, voilà une question intéressante…', 'Hmm… laissez-moi réfléchir.', 'Bonne question, vraiment.'],
-          small: ['Alors…', 'Eh bien…', 'Hmm, voyons voir…'], brics: ['Ah, les BRICS…'] },
-    en: { big: ['Very good question…', 'Now, that is an interesting one…', 'Hmm… let me think.', 'Good question, really.'],
-          small: ['Well…', 'Let me see…', 'Hmm, let us see…'], brics: ['Ah, BRICS…'] }
+    // natural thinking sounds only: never a compliment on the question
+    fr: { big: ['Hmm…', 'Voyons…', 'Hmm, laissez-moi réfléchir.', 'Eh bien…'],
+          small: ['Alors…', 'Hmm…', 'Voyons…'], brics: ['Ah, les BRICS…'] },
+    en: { big: ['Hmm…', 'Let me think.', 'Well…', 'Let me see…'],
+          small: ['Well…', 'Hmm…', 'So…'], brics: ['Ah, BRICS…'] }
   };
   const GREET = /^(bonjour|bonsoir|salut|coucou|hello|hi|hey|good (morning|afternoon|evening)|merci|thanks|thank you|au revoir|bye|ça va|comment (ça va|allez-vous|vas-tu)|how are you)\b/i;
   const fillerReady = new Set();
@@ -201,7 +208,8 @@
     if (voice === 'browser') return null;
     const s = q.trim().toLowerCase(), n = s.split(/\s+/).length, F = FILLERS[lang];
     if (GREET.test(s) || n <= 3) return null;
-    let pool = /\b(pourquoi|comment|expliqu\w*|pensez|penses|avis|croyez|crois|why|how|explain|think|opinion)\b/.test(s) ? F.big : (Math.random() < 0.3 ? null : F.small);
+    const deep = /\b(pourquoi|comment|expliqu\w*|pensez|penses|avis|croyez|crois|why|how|explain|think|opinion)\b/.test(s);
+    let pool = deep ? (Math.random() < 0.65 ? F.big : null) : (Math.random() < 0.4 ? F.small : null);
     if (/\bbrics\b/.test(s) && Math.random() < 0.35) pool = F.brics;
     if (!pool) return null;
     const ok = pool.filter(x => x !== lastFiller && fillerReady.has(voice + '|' + lang + '|' + x));
