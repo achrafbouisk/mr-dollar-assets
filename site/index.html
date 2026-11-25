@@ -65,6 +65,11 @@
     try { W.speechSynthesis && W.speechSynthesis.cancel(); W.__dbg.setTalk(false); } catch (e) {}
     setQ(q); setSub(T().thinking); W.__mood = 'think';
     try { W.__dbg.goTo('close'); } catch (e) {}
+    const quick = quickReply(q);
+    if (quick) {
+      history.push({ role: 'user', content: q }, { role: 'assistant', content: quick });
+      busy = false; setBtn('idle'); await speak(quick); if (!listening) W.__mood = null; setQ(''); return;
+    }
     const answerP = fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q, history, lang }) })
       .then(r => r.json().then(j => { if (!r.ok || !j.answer) throw new Error(j.error || 'HTTP ' + r.status); return j.answer; }))
       .then(answer => { history.push({ role: 'user', content: q }, { role: 'assistant', content: answer }); while (history.length > 12) history.shift(); return answer; })
@@ -78,6 +83,21 @@
     await speak(answer);
     if (!listening) W.__mood = null;
     setQ('');
+  }
+  // Greetings / thanks / goodbyes: answer with the same short courtesy, without asking the AI.
+  function quickReply(q) {
+    const s = q.toLowerCase().replace(/[.!?,;:…]+/g, ' ').replace(/\s+/g, ' ').trim()
+      .replace(/\s*(monsieur|mister|mr) (le )?dollar$/, '').replace(/\s*(à tous|tout le monde|everyone|everybody)$/, '');
+    const fr = lang === 'fr';
+    const map = [
+      [/^(bonjour|salut|coucou)$/, fr ? 'Bonjour.' : 'Hello.'], [/^bonsoir$/, 'Bonsoir.'],
+      [/^(hello|hi|hey)$/, fr ? 'Bonjour.' : 'Hello.'], [/^good (morning|afternoon|evening)$/, m => 'Good ' + m.split(' ')[1] + '.'],
+      [/^(merci|merci beaucoup|thanks|thank you)$/, fr ? 'Avec plaisir.' : 'My pleasure.'],
+      [/^(au revoir|bye|goodbye|à bientôt)$/, fr ? 'Au revoir.' : 'Goodbye.'],
+      [/^(ça va|comment ça va|comment allez-vous|vous allez bien|how are you)$/, fr ? 'Très bien, merci.' : 'Very well, thank you.']
+    ];
+    for (const [re, out] of map) { const m = s.match(re); if (m) return typeof out === 'function' ? out(m[0]) : out; }
+    return null;
   }
   async function sayAndWait(text) {
     lastFiller = text;
@@ -340,12 +360,14 @@
     askBtn.addEventListener('click', () => listening ? stopListening() : startListening());
     D.getElementById('speak').onclick = () => { speakToken++; W.__dbg.say(T().intro); };
     applyLang();
+    const typing = e => { const t = (e.target && e.target.tagName) || ''; return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT'; };
     const key = e => {
-      if (e.code !== 'Space' || e.repeat) return;
-      const t = (e.target && e.target.tagName) || ''; if (t === 'INPUT' || t === 'TEXTAREA') return;
-      e.preventDefault(); listening ? stopListening() : startListening();
+      if (e.code !== 'Space' || typing(e)) return;
+      e.preventDefault(); e.stopPropagation();          // Space must never also "click" a focused button (e.g. the intro)
+      if (e.type === 'keydown' && !e.repeat) listening ? stopListening() : startListening();
     };
-    D.addEventListener('keydown', key); document.addEventListener('keydown', key);
+    for (const d of [D, document]) { d.addEventListener('keydown', key, true); d.addEventListener('keyup', key, true); }
+    D.querySelectorAll('.bar button').forEach(b => b.addEventListener('click', () => b.blur()));
     window.__ask = ask;
     setTimeout(prefetchFillers, 1500);
   }
