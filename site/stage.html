@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mr. Dollar – Live Interview</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Mrs+Saint+Delafield&family=Old+Standard+TT:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet">
+<style>
+  :root{--gold:#d9b25f;--ink:#f1ead6}
+  html,body{margin:0;height:100%;overflow:hidden;background:#0b0b0a;color:var(--ink);font-family:"Old Standard TT",Georgia,serif}
+  body{background:radial-gradient(ellipse 70% 60% at 50% 46%,#34322d 0%,#1a1916 55%,#090908 100%)}
+  #c{position:fixed;inset:0;display:block}
+  .vignette{position:fixed;inset:0;pointer-events:none;background:radial-gradient(ellipse 85% 75% at 50% 48%,transparent 55%,rgba(0,0,0,.55) 100%)}
+  .grain{position:fixed;inset:-50%;pointer-events:none;opacity:.07;mix-blend-mode:overlay;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E")}
+  .ui{position:fixed;left:0;right:0;top:18px;text-align:center;pointer-events:none;padding:0 16px;transition:opacity .6s}
+  .ui h1{margin:0;font-weight:700;font-size:clamp(22px,3.6vw,38px);letter-spacing:.32em;color:var(--gold);text-shadow:0 2px 18px rgba(0,0,0,.8)}
+  .ui p{margin:6px 0 0;font-style:italic;font-size:clamp(12px,1.6vw,15px);opacity:.75;letter-spacing:.04em}
+  .bar{position:fixed;left:0;right:0;bottom:22px;display:flex;gap:10px;justify-content:center;flex-wrap:wrap;padding:0 16px}
+  .bar button{font-family:inherit;font-size:15px;letter-spacing:.04em;padding:11px 20px;border-radius:30px;border:1px solid rgba(217,178,95,.7);background:rgba(16,15,13,.72);color:var(--ink);cursor:pointer;backdrop-filter:blur(6px);transition:background .2s,color .2s}
+  .bar button:hover{background:var(--gold);color:#14120e}
+  .bar button.on{background:var(--gold);color:#14120e}
+  .bar button:disabled{opacity:.45;cursor:not-allowed;background:rgba(16,15,13,.72);color:var(--ink)}
+  #sub{position:fixed;left:50%;bottom:82px;transform:translateX(-50%);width:min(760px,calc(100vw - 32px));box-sizing:border-box;text-align:center;font-size:clamp(15px,1.9vw,19px);line-height:1.45;background:rgba(10,10,9,.62);padding:10px 18px;border-radius:12px;opacity:0;transition:opacity .4s;pointer-events:none}
+  #hint{position:fixed;left:0;right:0;bottom:84px;text-align:center;font-size:13px;font-style:italic;opacity:.45;pointer-events:none;transition:opacity .6s}
+  #load{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;font-style:italic;letter-spacing:.06em;opacity:.75;pointer-events:none;transition:opacity .6s}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div class="vignette"></div><div class="grain"></div>
+<div id="load">Printing a fresh dollar…</div>
+<div class="ui"><h1>MR. DOLLAR</h1><p>Federal Reserve Note &middot; World Reserve Currency since 1944</p></div>
+<div id="hint">Drag to turn the note &middot; scroll to zoom</div>
+<div id="sub"></div>
+<div class="bar">
+  <button id="speak">&#9654; Hear him speak</button>
+  <button id="close">&#128269; Close-up</button>
+  <button disabled title="AI brain coming soon">&#127908; Ask a question (soon)</button>
+</div>
+<script type="text/plain" id="warp">// Talking-portrait warp for the series-2021 $1 bill scan. Works in scan pixels (1920 x 806, y down).
+uniform float uJaw, uWide, uRound, uBlink, uBrow, uRoll;
+uniform vec2 uHead;
+const vec2 IMG = vec2(1920.0, 806.0);
+float soft(float x) { return smoothstep(1.0, 0.0, x); }
+vec2 warpPx(vec2 P, out float gap) {
+  gap = 0.0;
+  // head: small nods / sway / tilt that fade out before the oval frame and the coat
+  vec2 HC = vec2(1000.0, 389.0);
+  float hm = smoothstep(1.0, 0.72, length((P - HC) / vec2(118.0, 152.0)));
+  vec2 piv = vec2(1009.0, 537.0);
+  float a = uRoll * hm;
+  vec2 Q = P - uHead * hm;
+  Q = piv + mat2(cos(a), sin(a), -sin(a), cos(a)) * (Q - piv);
+  // eyebrows lift
+  float mb = soft(length((Q - vec2(967.0, 349.0)) / vec2(27.0, 16.0))) + soft(length((Q - vec2(1035.0, 349.0)) / vec2(27.0, 16.0)));
+  Q.y += uBrow * 4.1 * mb;
+  // mouth and jaw
+  vec2 M = vec2(1007.0, 447.5);
+  float hw = 29.0 * (1.0 + 0.22 * uWide - 0.36 * uRound);
+  float dx = (Q.x - M.x) / hw;
+  float lens = pow(clamp(1.0 - dx * dx, 0.0, 1.0), 0.8);
+  float open = uJaw * 13.5 * (1.0 + 0.25 * uRound);
+  float jx = exp(-pow((Q.x - M.x) / 57.0, 2.0));
+  float below = Q.y - M.y;
+  if (below >= 0.0) {
+    float g = 1.0 - smoothstep(9.5, 76.0, below);
+    float s = smoothstep(0.0, 25.0, below);
+    float d = open * (lens + max(jx - lens, 0.0) * s) * g;
+    float ys = Q.y - d;
+    gap = smoothstep(0.0, 2.8, M.y - ys);
+    Q.y = ys;
+  } else {
+    float up = open * 0.42 * lens * (1.0 - smoothstep(0.0, 17.5, -below));
+    float ys = Q.y + up;
+    gap = smoothstep(0.0, 2.8, ys - M.y);
+    Q.y = ys;
+  }
+  return Q;
+}
+// closed-eye lash line, drawn while blinking
+float lashLine(vec2 P) {
+  float l1 = exp(-pow((P.y - 368.0) / 1.4, 2.0)) * smoothstep(1.0, 0.6, abs(P.x - 967.5) / 16.0);
+  float l2 = exp(-pow((P.y - 368.5) / 1.4, 2.0)) * smoothstep(1.0, 0.6, abs(P.x - 1035.0) / 16.0);
+  return uBlink * uBlink * (l1 + l2);
+}
+// eyelid coverage for blinks: 1 inside each eye opening
+float eyeLid(vec2 Q) {
+  float m1 = smoothstep(1.0, 0.55, length((Q - vec2(967.5, 364.0)) / vec2(16.0, 7.3)));
+  float m2 = smoothstep(1.0, 0.55, length((Q - vec2(1035.0, 364.5)) / vec2(16.0, 7.3)));
+  return clamp(m1 + m2, 0.0, 1.0) * smoothstep(0.0, 0.6, uBlink);
+}
+</script>
+<script type="importmap">{"imports":{"three":"https://unpkg.com/three@0.160.0/build/three.module.js","three/addons/":"https://unpkg.com/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+
+/* ================= renderer & stage ================= */
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.setSize(innerWidth, innerHeight);
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 0.9;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+renderer.shadowMap.enabled = true; renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+const ANISO = renderer.capabilities.getMaxAnisotropy();
+const scene = new THREE.Scene();
+scene.environment = new THREE.PMREMGenerator(renderer).fromScene(new RoomEnvironment(), 0.04).texture;
+scene.environmentIntensity = 0.6;
+const camera = new THREE.PerspectiveCamera(30, innerWidth / innerHeight, 0.05, 100);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true; controls.enablePan = false; controls.minPolarAngle = 0.75; controls.maxPolarAngle = 1.95;
+
+scene.add(new THREE.HemisphereLight(0xfff3e2, 0x1b1a17, 0.5));
+const key = new THREE.DirectionalLight(0xfff1dc, 2.6); key.position.set(-3, 6.5, 6); key.castShadow = false;
+key.shadow.mapSize.set(2048, 2048); Object.assign(key.shadow.camera, { left: -4, right: 4, top: 5, bottom: -3, far: 30 });
+key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02; key.shadow.radius = 6; scene.add(key);
+const rim = new THREE.DirectionalLight(0xcfe4ff, 1.1); rim.position.set(5, 3, -5); scene.add(rim);
+const fill = new THREE.DirectionalLight(0xffe2bd, 0.45); fill.position.set(5, 1.5, 4); scene.add(fill);
+const blob = (() => { const c = document.createElement('canvas'); c.width = c.height = 256; const x = c.getContext('2d'); const g = x.createRadialGradient(128, 128, 0, 128, 128, 128); g.addColorStop(0, 'rgba(0,0,0,.62)'); g.addColorStop(0.55, 'rgba(0,0,0,.3)'); g.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g; x.fillRect(0, 0, 256, 256); return new THREE.CanvasTexture(c); })();
+const floor = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshBasicMaterial({ map: blob, transparent: true, depthWrite: false }));
+floor.rotation.x = -Math.PI / 2; floor.position.set(-0.25, 0.002, 0.15); floor.scale.set(4.6, 1.5, 1); scene.add(floor);
+
+/* ================= banknote artwork (design units 2048 x 784, true 2.61:1 ratio) ================= */
+const DW = 2048, DH = 784, TAU = Math.PI * 2;
+const TK = Math.min(2, renderer.capabilities.maxTextureSize / DW);
+const INK = '#1b1f1c', GRN = '#2d6a4b', BGRN = '#2a5b43', PAPER = '#d9dac5';
+const SERIF = '"Old Standard TT",Georgia,serif', SIGN = '"Mrs Saint Delafield",cursive';
+let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; };
+const mk = (w = DW, h = DH, k = TK) => { const c = document.createElement('canvas'); c.width = Math.round(w * k); c.height = Math.round(h * k); const x = c.getContext('2d'); x.scale(k, k); return [c, x]; };
+const tex = (c, mirror) => { const t = new THREE.CanvasTexture(c); t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = ANISO; if (mirror) { t.wrapS = THREE.RepeatWrapping; t.repeat.x = -1; t.offset.x = 1; } return t; };
+
+function guilloche(x, cx, cy, R, r, d, n, color, w, sy = 1) {
+  x.save(); x.translate(cx, cy); x.scale(1, sy); x.strokeStyle = color; x.lineWidth = w / Math.max(sy, 1e-3) ** 0.5; x.beginPath();
+  const N = 3000;
+  for (let i = 0; i <= N; i++) { const t = i / N * TAU * n; const px = (R - r) * Math.cos(t) + d * Math.cos((R - r) / r * t), py = (R - r) * Math.sin(t) - d * Math.sin((R - r) / r * t); i ? x.lineTo(px, py) : x.moveTo(px, py); }
+  x.stroke(); x.restore();
+}
+function arcText(x, str, cx, cy, r, a0, a1, font, color, inside, ls = 0) {
+  x.save(); x.font = font; x.fillStyle = color; x.textAlign = 'center'; x.textBaseline = 'middle';
+  const n = str.length; for (let i = 0; i < n; i++) { const a = a0 + (a1 - a0) * (i + 0.5) / n; x.save(); x.translate(cx + Math.cos(a) * r, cy + Math.sin(a) * r); x.rotate(inside ? a - Math.PI / 2 : a + Math.PI / 2); x.fillText(str[i], 0, 0); x.restore(); }
+  x.restore();
+}
+function paperBase(c, x, c1, c2, fib = 520) {
+  const g = x.createLinearGradient(0, 0, DW, DH); g.addColorStop(0, c1); g.addColorStop(0.5, c2); g.addColorStop(1, c1); x.fillStyle = g; x.fillRect(0, 0, DW, DH);
+  const id = x.getImageData(0, 0, c.width, c.height), d = id.data;
+  for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 12; d[i] += n; d[i + 1] += n; d[i + 2] += n * 0.9; }
+  x.putImageData(id, 0, 0);
+  for (let i = 0; i < 60; i++) { const g2 = x.createRadialGradient(0, 0, 0, 0, 0, 1); const px = Math.random() * DW, py = Math.random() * DH, r = 40 + Math.random() * 160; x.save(); x.translate(px, py); x.scale(r, r * (0.5 + Math.random())); g2.addColorStop(0, `rgba(${Math.random() < .5 ? '120,110,80' : '255,255,245'},${0.035 + Math.random() * 0.03})`); g2.addColorStop(1, 'rgba(0,0,0,0)'); x.fillStyle = g2; x.beginPath(); x.arc(0, 0, 1, 0, TAU); x.fill(); x.restore(); }
+  for (let i = 0; i < fib; i++) { x.strokeStyle = Math.random() < 0.5 ? 'rgba(185,40,45,.28)' : 'rgba(40,70,185,.24)'; x.lineWidth = 0.9; x.beginPath(); const px = Math.random() * DW, py = Math.random() * DH; x.moveTo(px, py); x.quadraticCurveTo(px + Math.random() * 14 - 7, py + Math.random() * 14 - 7, px + Math.random() * 22 - 11, py + Math.random() * 22 - 11); x.stroke(); }
+}
+function perim(x, inset, amp, freq, ph) {
+  const a = DW - 2 * inset, b = DH - 2 * inset, L = 2 * a + 2 * b, N = Math.round(L * 1.2); x.beginPath();
+  for (let s = 0; s <= N; s++) {
+    const l = s / N * L; let px, py, nx, ny;
+    if (l < a) { px = inset + l; py = inset; nx = 0; ny = 1; } else if (l < a + b) { px = DW - inset; py = inset + l - a; nx = -1; ny = 0; } else if (l < 2 * a + b) { px = DW - inset - (l - a - b); py = DH - inset; nx = 0; ny = -1; } else { px = inset; py = DH - inset - (l - 2 * a - b); nx = 1; ny = 0; }
+    const o = Math.sin(l / freq + ph) * amp; s ? x.lineTo(px + nx * o, py + ny * o) : x.moveTo(px + nx * o, py + ny * o);
+  }
+  x.stroke();
+}
+function lace(x, o, i, ink, paper) {
+  x.save(); x.beginPath(); x.rect(o, o, DW - 2 * o, DH - 2 * o); x.rect(i, i, DW - 2 * i, DH - 2 * i); x.clip('evenodd');
+  x.fillStyle = ink; x.fillRect(0, 0, DW, DH); x.strokeStyle = paper; x.lineWidth = 0.85; const m = (o + i) / 2;
+  for (let k = 0; k < 12; k++) perim(x, m, (i - o) * (k % 2 ? 0.44 : 0.3), 3.6 + k * 0.38, k * 0.83);
+  x.restore();
+  x.strokeStyle = ink; x.lineWidth = 2.2; x.strokeRect(o - 8, o - 8, DW - 2 * o + 16, DH - 2 * o + 16); x.lineWidth = 0.8; x.strokeRect(o - 13, o - 13, DW - 2 * o + 26, DH - 2 * o + 26);
+  x.lineWidth = 1.6; x.strokeRect(i + 6, i + 6, DW - 2 * i - 12, DH - 2 * i - 12);
+  x.save(); x.fillStyle = ink; for (let s = i + 16; s < DW - i - 16; s += 9) { x.beginPath(); x.arc(s, i + 12, 1.3, 0, TAU); x.arc(s, DH - i - 12, 1.3, 0, TAU); x.fill(); }
+  for (let s = i + 16; s < DH - i - 16; s += 9) { x.beginPath(); x.arc(i + 12, s, 1.3, 0, TAU); x.arc(DW - i - 12, s, 1.3, 0, TAU); x.fill(); } x.restore();
+}
+function rosette(x, cx, cy, r, txt, ink, paper) {
+  x.save(); x.fillStyle = ink; x.beginPath(); x.arc(cx, cy, r, 0, TAU); x.fill();
+  guilloche(x, cx, cy, r * 0.96, r * 0.2, r * 0.34, 13, paper, 0.9); guilloche(x, cx, cy, r * 0.8, r * 0.16, r * 0.21, 15, paper, 0.7);
+  x.fillStyle = paper; x.beginPath(); x.arc(cx, cy, r * 0.56, 0, TAU); x.fill();
+  x.strokeStyle = ink; x.lineWidth = 2; x.beginPath(); x.arc(cx, cy, r * 0.5, 0, TAU); x.stroke(); x.lineWidth = 0.7; x.beginPath(); x.arc(cx, cy, r * 0.46, 0, TAU); x.stroke();
+  x.fillStyle = ink; x.font = `700 ${r * 1.08}px ${SERIF}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText(txt, cx, cy + r * 0.05);
+  x.restore();
+}
+function ribbon(x, cx, cy, w, h, txt, ink, paper, font) {
+  x.save(); x.fillStyle = ink; x.beginPath(); const n = h * 0.45;
+  x.moveTo(cx - w / 2 - n, cy - h / 2); x.lineTo(cx + w / 2 + n, cy - h / 2); x.lineTo(cx + w / 2, cy); x.lineTo(cx + w / 2 + n, cy + h / 2); x.lineTo(cx - w / 2 - n, cy + h / 2); x.lineTo(cx - w / 2, cy); x.closePath(); x.fill();
+  x.strokeStyle = paper; x.lineWidth = 0.9; x.strokeRect(cx - w / 2 + 5, cy - h / 2 + 4, w - 10, h - 8);
+  x.globalAlpha = 0.35; for (let s = cx - w / 2 + 8; s < cx + w / 2 - 8; s += 3) { x.beginPath(); x.moveTo(s, cy - h / 2 + 6); x.lineTo(s, cy + h / 2 - 6); x.stroke(); } x.globalAlpha = 1;
+  x.font = font; x.textAlign = 'center'; x.textBaseline = 'middle'; x.lineWidth = 4; x.strokeStyle = ink; x.strokeText(txt, cx, cy + 1, w - 20); x.fillStyle = paper; x.fillText(txt, cx, cy + 1, w - 20);
+  x.restore();
+}
+function spiky(x, cx, cy, r, col, n = 60, len = 13) { x.save(); x.fillStyle = col; for (let i = 0; i < n; i++) { const a = i / n * TAU, b = a + Math.PI / n; x.beginPath(); x.moveTo(cx + Math.cos(a) * r, cy + Math.sin(a) * r); x.lineTo(cx + Math.cos(a + Math.PI / n / 2) * (r + len), cy + Math.sin(a + Math.PI / n / 2) * (r + len)); x.lineTo(cx + Math.cos(b) * r, cy + Math.sin(b) * r); x.fill(); } x.restore(); }
+function star(x, cx, cy, r, col) { x.fillStyle = col; x.beginPath(); for (let i = 0; i < 10; i++) { const a = -Math.PI / 2 + i * Math.PI / 5, rr = i % 2 ? r * 0.42 : r; x.lineTo(cx + Math.cos(a) * rr, cy + Math.sin(a) * rr); } x.closePath(); x.fill(); }
+// text whose letters are filled with fine engraved ruling
+function engravedText(x, txt, cx, cy, font, color, opts = {}) {
+  const [lc, lx] = mk();
+  lx.font = font; lx.textAlign = 'center'; lx.textBaseline = 'middle'; if (opts.ls) lx.letterSpacing = opts.ls;
+  lx.fillStyle = color; lx.fillText(txt, cx, cy, opts.max || 4000);
+  lx.globalCompositeOperation = 'source-atop'; lx.strokeStyle = PAPER; lx.lineWidth = opts.lw || 0.9;
+  const m = lx.measureText(txt), h = (m.actualBoundingBoxAscent + m.actualBoundingBoxDescent) || 60, top = cy - h / 2;
+  for (let y = top; y < top + h * (opts.frac || 0.55); y += opts.gap || 3.2) { lx.beginPath(); lx.moveTo(0, y); lx.lineTo(DW, y); lx.stroke(); }
+  lx.globalCompositeOperation = 'source-over';
+  if (opts.inline) { lx.lineWidth = 0.7; lx.strokeStyle = PAPER; lx.strokeText(txt, cx, cy, opts.max || 4000); }
+  x.save(); x.setTransform(1, 0, 0, 1, 0, 0); x.drawImage(lc, 0, 0); x.restore();
+}
+function fineBackground(x, col, alpha) {
+  x.save(); x.beginPath(); x.rect(64, 64, DW - 128, DH - 128); x.clip(); x.strokeStyle = `rgba(${col},${alpha})`; x.lineWidth = 0.6;
+  for (let y = 60; y < DH - 50; y += 5.2) { x.beginPath(); for (let s = 60; s <= DW - 60; s += 7) x.lineTo(s, y + Math.sin(s / 41 + y / 19) * 2.4 + Math.sin(s / 10.5 + y) * 0.7); x.stroke(); }
+  x.strokeStyle = `rgba(${col},${alpha * 0.6})`;
+  for (let s = 70; s < DW - 60; s += 9) { x.beginPath(); for (let y = 60; y <= DH - 60; y += 7) x.lineTo(s + Math.sin(y / 33 + s / 27) * 3, y); x.stroke(); }
+  x.restore();
+}
+function treasurySeal(x, cx, cy, r, G) {
+  spiky(x, cx, cy, r, G, 64, 12);
+  x.save(); x.fillStyle = PAPER; x.beginPath(); x.arc(cx, cy, r - 3, 0, TAU); x.fill();
+  x.strokeStyle = G; x.lineWidth = 2.4; x.beginPath(); x.arc(cx, cy, r - 9, 0, TAU); x.stroke(); x.lineWidth = 1; x.beginPath(); x.arc(cx, cy, r - 31, 0, TAU); x.stroke();
+  arcText(x, 'THE DEPARTMENT OF THE TREASURY', cx, cy, r - 20, Math.PI * 0.74, Math.PI * 2.26, `700 12.5px ${SERIF}`, G);
+  arcText(x, '1789', cx, cy, r - 20, Math.PI * 0.6, Math.PI * 0.4, `700 13px ${SERIF}`, G, true);
+  const sw = 31, top = cy - 34, bot = cy + 42;
+  const shield = () => { x.beginPath(); x.moveTo(cx - sw, top); x.lineTo(cx + sw, top); x.lineTo(cx + sw, cy + 10); x.quadraticCurveTo(cx + sw, bot - 6, cx, bot); x.quadraticCurveTo(cx - sw, bot - 6, cx - sw, cy + 10); x.closePath(); };
+  shield(); x.fillStyle = PAPER; x.fill(); x.save(); shield(); x.clip();
+  x.strokeStyle = G; x.lineWidth = 0.8; for (let y = top; y < top + 22; y += 2.4) { x.beginPath(); x.moveTo(cx - sw, y); x.lineTo(cx + sw, y); x.stroke(); }
+  x.fillStyle = PAPER; x.fillRect(cx - 20, top + 3, 40, 16);
+  x.strokeStyle = G; x.lineWidth = 1.4; x.beginPath(); x.moveTo(cx, top + 4); x.lineTo(cx, top + 17); x.moveTo(cx - 16, top + 7); x.lineTo(cx + 16, top + 7); x.stroke();
+  for (const s of [-1, 1]) { x.beginPath(); x.arc(cx + 14 * s, top + 13, 5, 0, Math.PI); x.stroke(); x.beginPath(); x.moveTo(cx + 14 * s, top + 7); x.lineTo(cx + 9 * s, top + 13); x.moveTo(cx + 14 * s, top + 7); x.lineTo(cx + 19 * s, top + 13); x.stroke(); }
+  x.fillStyle = G; x.beginPath(); x.moveTo(cx - sw, cy + 8); x.lineTo(cx, cy - 10); x.lineTo(cx + sw, cy + 8); x.lineTo(cx + sw, cy + 20); x.lineTo(cx, cy + 2); x.lineTo(cx - sw, cy + 20); x.closePath(); x.fill();
+  for (let i = 0; i < 13; i++) { const u = (i + 0.5) / 13, px = cx - sw + u * 2 * sw, py = (u < 0.5 ? cy + 8 - (u * 2) * 18 : cy - 10 + ((u - 0.5) * 2) * 18) + 5; x.fillStyle = PAPER; x.beginPath(); x.arc(px, py, 1.6, 0, TAU); x.fill(); }
+  x.strokeStyle = G; x.lineWidth = 2; x.beginPath(); x.arc(cx, cy + 22, 5, 0, TAU); x.moveTo(cx, cy + 27); x.lineTo(cx, cy + 38); x.moveTo(cx, cy + 34); x.lineTo(cx + 6, cy + 34); x.moveTo(cx, cy + 37); x.lineTo(cx + 5, cy + 37); x.stroke();
+  x.restore(); shield(); x.strokeStyle = G; x.lineWidth = 2; x.stroke(); x.restore();
+}
+function reserveSeal(x, cx, cy, r) {
+  spiky(x, cx, cy, r, INK, 72, 11);
+  x.save(); x.fillStyle = PAPER; x.beginPath(); x.arc(cx, cy, r - 3, 0, TAU); x.fill();
+  x.strokeStyle = INK; x.lineWidth = 3; x.beginPath(); x.arc(cx, cy, r - 9, 0, TAU); x.stroke(); x.lineWidth = 1.3; x.beginPath(); x.arc(cx, cy, r - 33, 0, TAU); x.stroke();
+  arcText(x, 'FEDERAL RESERVE BANK OF NEW YORK · NEW YORK ·', cx, cy, r - 21, Math.PI * 0.62, Math.PI * 2.58, `700 12.5px ${SERIF}`, INK);
+  x.fillStyle = INK; x.font = `700 86px ${SERIF}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillText('B', cx, cy + 4);
+  x.restore();
+}
+function signatureBlock(x, cx, cy, name, title, col) {
+  x.save(); x.fillStyle = col; x.font = `400 50px ${SIGN}`; x.textAlign = 'center'; x.textBaseline = 'alphabetic'; x.fillText(name, cx, cy);
+  x.strokeStyle = col; x.lineWidth = 0.8; x.beginPath(); x.moveTo(cx - 110, cy + 10); x.lineTo(cx + 110, cy + 10); x.stroke();
+  x.font = `italic 400 16px ${SERIF}`; x.textBaseline = 'middle'; x.fillText(title, cx, cy + 28); x.restore();
+}
+function wear(x) {
+  // lighter ink along the folds and slightly darker, handled edges
+  x.save(); x.strokeStyle = 'rgba(245,244,232,.22)'; x.lineWidth = 4; x.shadowColor = 'rgba(245,244,232,.4)'; x.shadowBlur = 6;
+  x.beginPath(); x.moveTo(DW / 2 + 6, 0); x.bezierCurveTo(DW / 2 - 4, DH * 0.3, DW / 2 + 8, DH * 0.7, DW / 2 - 2, DH); x.stroke();
+  x.lineWidth = 2.5; x.strokeStyle = 'rgba(245,244,232,.12)'; x.beginPath(); x.moveTo(0, DH / 2 + 4); x.lineTo(DW, DH / 2 - 3); x.stroke(); x.restore();
+  const g = x.createLinearGradient(0, 0, 0, DH); g.addColorStop(0, 'rgba(90,85,60,.10)'); g.addColorStop(0.06, 'rgba(0,0,0,0)'); g.addColorStop(0.94, 'rgba(0,0,0,0)'); g.addColorStop(1, 'rgba(90,85,60,.12)');
+  x.fillStyle = g; x.fillRect(0, 0, DW, DH);
+  const g2 = x.createLinearGradient(0, 0, DW, 0); g2.addColorStop(0, 'rgba(90,85,60,.10)'); g2.addColorStop(0.03, 'rgba(0,0,0,0)'); g2.addColorStop(0.97, 'rgba(0,0,0,0)'); g2.addColorStop(1, 'rgba(90,85,60,.10)');
+  x.fillStyle = g2; x.fillRect(0, 0, DW, DH);
+}
+const OVAL = { cx: 1024, cy: 436, rx: 168, ry: 212 };
+function drawFront(withPortrait = true) {
+  const [c, x] = mk();
+  paperBase(c, x, '#ccd2b9', '#d8dcc5');
+  fineBackground(x, '45,80,62', 0.15);
+  x.save(); x.beginPath(); x.rect(70, 70, DW - 140, DH - 140); x.clip();
+  guilloche(x, OVAL.cx, OVAL.cy, 330, 64, 118, 34, 'rgba(40,72,56,.16)', 0.7, 0.75);
+  guilloche(x, 600, 436, 170, 38, 60, 28, 'rgba(40,72,56,.2)', 0.7);
+  guilloche(x, 1450, 446, 165, 36, 56, 28, 'rgba(40,72,56,.2)', 0.7);
+  x.restore();
+  lace(x, 22, 56, INK, PAPER);
+  [[178, 172], [DW - 178, 172], [178, DH - 172], [DW - 178, DH - 172]].forEach(([a, b]) => rosette(x, a, b, 90, '1', INK, PAPER));
+  x.save(); x.font = `700 20px ${SERIF}`; x.textAlign = 'center'; x.textBaseline = 'middle';
+  for (const [a, b] of [[318, 128], [DW - 318, 128], [318, DH - 128], [DW - 318, DH - 128]]) { x.fillStyle = INK; x.beginPath(); x.arc(a, b, 15, 0, TAU); x.fill(); x.fillStyle = PAPER; x.fillText('2', a, b + 1); }
+  x.restore();
+  x.save(); x.fillStyle = INK; x.textAlign = 'center'; x.textBaseline = 'middle'; x.font = `700 23px ${SERIF}`; x.letterSpacing = '15px'; x.fillText('FEDERAL RESERVE NOTE', DW / 2 + 7, 98); x.restore();
+  engravedText(x, 'THE UNITED STATES OF AMERICA', DW / 2, 160, `700 64px ${SERIF}`, INK, { ls: '7px', max: 1260, gap: 2.6, frac: 0.34, lw: 0.75 });
+  // portrait frame
+  const { cx, cy, rx, ry } = OVAL;
+  x.save(); x.translate(cx, cy); x.scale(1, (ry + 34) / (rx + 34)); x.fillStyle = INK; x.beginPath(); x.arc(0, 0, rx + 34, 0, TAU); x.fill(); x.restore();
+  x.save(); x.beginPath(); x.ellipse(cx, cy, rx + 34, ry + 34, 0, 0, TAU); x.clip();
+  for (let k = 0; k < 4; k++) guilloche(x, cx, cy, rx + 33, 21 + k * 4.5, 25, 48, 'rgba(226,226,209,.6)', 0.75, (ry + 34) / (rx + 34));
+  x.restore();
+  x.fillStyle = PAPER; x.beginPath(); x.ellipse(cx, cy, rx + 3, ry + 3, 0, 0, TAU); x.fill();
+  x.strokeStyle = PAPER; x.lineWidth = 1.4; x.beginPath(); x.ellipse(cx, cy, rx + 13, ry + 13, 0, 0, TAU); x.stroke();
+  x.fillStyle = PAPER; for (let i = 0; i < 150; i++) { const a = i / 150 * TAU; x.beginPath(); x.arc(cx + Math.cos(a) * (rx + 26), cy + Math.sin(a) * (ry + 26), 1.5, 0, TAU); x.fill(); }
+  x.strokeStyle = INK; x.lineWidth = 2; x.beginPath(); x.ellipse(cx, cy, rx + 1, ry + 1, 0, 0, TAU); x.stroke();
+  if (!withPortrait) { x.save(); x.beginPath(); x.ellipse(cx, cy, rx, ry, 0, 0, TAU); x.clip(); x.strokeStyle = INK; x.lineWidth = 1.1; for (let y = cy - ry; y < cy + ry; y += 3.3) { x.beginPath(); x.moveTo(cx - rx, y); x.lineTo(cx + rx, y); x.stroke(); } x.restore(); engravedText(x, '$', cx, cy + 8, `700 260px ${SERIF}`, INK, { gap: 3, frac: 0.5 }); }
+  ribbon(x, cx, 678, 236, 34, 'MR. DOLLAR', INK, PAPER, `700 22px ${SERIF}`);
+  ribbon(x, cx, 738, 440, 50, 'ONE  DOLLAR', INK, PAPER, `700 38px ${SERIF}`);
+  // left: reserve seal, serial, legal tender, signature
+  reserveSeal(x, 600, 440, 96);
+  x.save(); x.fillStyle = GRN; x.font = `700 40px "Courier New",monospace`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.letterSpacing = '2px';
+  x.fillText('B 19440001 A', 560, 226); x.fillText('B 19440001 A', 1532, 586); x.restore();
+  x.save(); x.fillStyle = INK; x.font = `700 17px ${SERIF}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.letterSpacing = '1px';
+  x.fillText('THIS NOTE IS LEGAL TENDER', 600, 292); x.fillText('FOR ALL DEBTS, PUBLIC AND PRIVATE', 600, 314);
+  x.font = `700 19px ${SERIF}`; x.fillText('SERIES', 1290, 268); x.font = `700 26px ${SERIF}`; x.fillText('1944', 1290, 294);
+  x.font = `700 15px ${SERIF}`; x.letterSpacing = '2px'; x.fillText('WASHINGTON, D.C.', 1450, 318);
+  x.font = `700 15px ${SERIF}`; x.fillText('A 3', 330, 262); x.fillText('A 3', DW - 330, 526); x.fillText('F 127', DW - 400, DH - 104);
+  x.restore();
+  signatureBlock(x, 590, 640, 'Eleanor B. Whitfield', 'Treasurer of the United States', INK);
+  signatureBlock(x, 1440, 666, 'Henry M. Calloway', 'Secretary of the Treasury', INK);
+  treasurySeal(x, 1450, 446, 86, GRN);
+  wear(x);
+  return c;
+}
+function greatRing(x, cx, cy, R, G) {
+  x.save(); x.fillStyle = G; x.beginPath(); x.arc(cx, cy, R, 0, TAU); x.fill(); x.beginPath(); x.arc(cx, cy, R, 0, TAU); x.clip();
+  guilloche(x, cx, cy, R, R * 0.14, R * 0.17, 44, 'rgba(226,226,209,.6)', 0.8); guilloche(x, cx, cy, R * 0.97, R * 0.1, R * 0.12, 52, 'rgba(226,226,209,.45)', 0.6);
+  x.restore(); x.fillStyle = PAPER; x.beginPath(); x.arc(cx, cy, R - 21, 0, TAU); x.fill();
+  x.strokeStyle = G; x.lineWidth = 2; x.beginPath(); x.arc(cx, cy, R - 24, 0, TAU); x.stroke(); x.lineWidth = 0.8; x.beginPath(); x.arc(cx, cy, R - 28, 0, TAU); x.stroke();
+}
+function pyramid(x, cx, cy, R, G) {
+  greatRing(x, cx, cy, R, G);
+  const ex = cx, ey = cy - 50;
+  x.save(); x.beginPath(); x.arc(cx, cy, R - 52, 0, TAU); x.clip(); x.strokeStyle = G; x.lineWidth = 0.7;
+  for (let a = -Math.PI; a <= 0.001; a += Math.PI / 64) { x.beginPath(); x.moveTo(ex + Math.cos(a) * 34, ey + Math.sin(a) * 34); x.lineTo(ex + Math.cos(a) * R, ey + Math.sin(a) * R); x.stroke(); }
+  x.restore();
+  const by = cy + 66, ty = cy - 20, bw = 86, tw = 30;
+  const tr = () => { x.beginPath(); x.moveTo(cx - bw, by); x.lineTo(cx - tw, ty); x.lineTo(cx + tw, ty); x.lineTo(cx + bw, by); x.closePath(); };
+  tr(); x.fillStyle = PAPER; x.fill(); x.save(); tr(); x.clip();
+  x.strokeStyle = G; x.lineWidth = 1;
+  for (let i = 0; i <= 13; i++) { const y = by - (by - ty) * i / 13; x.beginPath(); x.moveTo(cx - 200, y); x.lineTo(cx + 200, y); x.stroke();
+    if (i < 13) { const y2 = by - (by - ty) * (i + 1) / 13; for (let s = cx - 100 + (i % 2) * 7; s < cx + 100; s += 14) { x.beginPath(); x.moveTo(s, y); x.lineTo(s, y2); x.stroke(); } } }
+  x.lineWidth = 0.8; for (let s = cx - 140; s < cx + 140; s += 3.2) { x.beginPath(); x.moveTo(s, by); x.lineTo(s + 60, ty); x.stroke(); }
+  x.restore(); x.save(); tr(); x.clip(); x.fillStyle = 'rgba(226,226,209,.55)'; x.beginPath(); x.moveTo(cx - bw, by); x.lineTo(cx - tw, ty); x.lineTo(cx - 4, ty); x.lineTo(cx - 20, by); x.fill(); x.restore();
+  tr(); x.strokeStyle = G; x.lineWidth = 1.6; x.stroke();
+  x.fillStyle = G; x.font = `700 9px ${SERIF}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.fillStyle = PAPER; x.fillRect(cx - 30, by - 6, 60, 10); x.fillStyle = G; x.fillText('MDCCLXXVI', cx, by - 1);
+  x.strokeStyle = G; x.lineWidth = 0.8; for (let s = cx - 105; s < cx + 105; s += 4) { x.beginPath(); x.moveTo(s, by + 2); x.lineTo(s + 3, by + 14); x.stroke(); }
+  // the eye in its glory
+  const tri = () => { x.beginPath(); x.moveTo(ex, ey - 32); x.lineTo(ex - 28, ey + 16); x.lineTo(ex + 28, ey + 16); x.closePath(); };
+  tri(); x.fillStyle = PAPER; x.fill(); x.strokeStyle = G; x.lineWidth = 1.6; x.stroke();
+  x.beginPath(); x.moveTo(ex - 13, ey + 3); x.quadraticCurveTo(ex, ey - 7, ex + 13, ey + 3); x.quadraticCurveTo(ex, ey + 11, ex - 13, ey + 3); x.stroke();
+  x.fillStyle = G; x.beginPath(); x.arc(ex, ey + 3, 3.4, 0, TAU); x.fill();
+  arcText(x, 'ANNUIT  COEPTIS', cx, cy, R - 40, Math.PI * 1.2, Math.PI * 1.8, `700 15px ${SERIF}`, G);
+  arcText(x, 'NOVUS ORDO SECLORUM', cx, cy, R - 40, Math.PI * 0.8, Math.PI * 0.2, `700 12.5px ${SERIF}`, G, true);
+}
+function eagle(x, cx, cy, R, G) {
+  greatRing(x, cx, cy, R, G);
+  const gy = cy - 74; x.strokeStyle = G; x.lineWidth = 0.6;
+  for (let a = 0; a < TAU; a += TAU / 48) { x.beginPath(); x.moveTo(cx + Math.cos(a) * 18, gy + Math.sin(a) * 18); x.lineTo(cx + Math.cos(a) * 25, gy + Math.sin(a) * 25); x.stroke(); }
+  [[0, -10], [-7, -3], [7, -3], [-13, 4], [0, 4], [13, 4], [-7, 11], [7, 11], [0, 18], [-14, -10], [14, -10], [-14, 18], [14, 18]].forEach(([a, b]) => star(x, cx + a * 0.9, gy + b * 0.8 - 3, 3.2, G));
+  for (const s of [-1, 1]) for (let k = 0; k < 10; k++) {
+    const u = k / 9, ang = s < 0 ? Math.PI + 0.25 + u * 1.25 : -0.25 - u * 1.25, len = 52 + 30 * Math.sin(u * Math.PI * 0.85 + 0.2), sx = cx + 16 * s, sy = cy - 10;
+    const tx = sx + Math.cos(ang) * len, ty = sy + Math.sin(ang) * len, nx = -Math.sin(ang) * 5.5, ny = Math.cos(ang) * 5.5;
+    x.beginPath(); x.moveTo(sx, sy); x.quadraticCurveTo((sx + tx) / 2 + nx, (sy + ty) / 2 + ny, tx, ty); x.quadraticCurveTo((sx + tx) / 2 - nx, (sy + ty) / 2 - ny, sx, sy); x.fillStyle = PAPER; x.fill(); x.strokeStyle = G; x.lineWidth = 1.1; x.stroke();
+    x.lineWidth = 0.6; x.beginPath(); x.moveTo(sx, sy); x.lineTo(tx, ty); x.stroke();
+  }
+  for (let k = 0; k < 5; k++) { const a = Math.PI / 2 + (k - 2) * 0.22, sx = cx, sy = cy + 40, tx = sx + Math.cos(a) * 36, ty = sy + Math.sin(a) * 36; x.beginPath(); x.moveTo(sx, sy); x.quadraticCurveTo(sx + 4, (sy + ty) / 2, tx, ty); x.quadraticCurveTo(sx - 4, (sy + ty) / 2, sx, sy); x.fillStyle = PAPER; x.fill(); x.strokeStyle = G; x.lineWidth = 1; x.stroke(); }
+  const sw = 22, top = cy - 18, bot = cy + 46;
+  const sh = () => { x.beginPath(); x.moveTo(cx - sw, top); x.lineTo(cx + sw, top); x.lineTo(cx + sw, cy + 22); x.quadraticCurveTo(cx + sw, bot - 4, cx, bot); x.quadraticCurveTo(cx - sw, bot - 4, cx - sw, cy + 22); x.closePath(); };
+  sh(); x.fillStyle = PAPER; x.fill(); x.save(); sh(); x.clip(); x.fillStyle = G; x.fillRect(cx - sw, top, sw * 2, 14);
+  for (let i = 0; i < 13; i++) if (i % 2 === 0) x.fillRect(cx - sw + i * (2 * sw / 13), top + 14, 2 * sw / 13, 60);
+  x.restore(); sh(); x.strokeStyle = G; x.lineWidth = 1.8; x.stroke();
+  x.fillStyle = PAPER; x.strokeStyle = G; x.lineWidth = 1.4; x.beginPath(); x.ellipse(cx - 4, cy - 32, 11, 10, 0, 0, TAU); x.fill(); x.stroke();
+  x.beginPath(); x.moveTo(cx - 13, cy - 35); x.quadraticCurveTo(cx - 26, cy - 34, cx - 22, cy - 26); x.lineTo(cx - 12, cy - 29); x.fill(); x.stroke();
+  x.fillStyle = G; x.beginPath(); x.arc(cx - 6, cy - 34, 1.6, 0, TAU); x.fill();
+  x.strokeStyle = G; x.lineWidth = 11; x.beginPath(); x.arc(cx, cy + 6, 66, Math.PI * 1.28, Math.PI * 1.72); x.stroke();
+  arcText(x, 'E PLURIBUS UNUM', cx, cy + 6, 66, Math.PI * 1.29, Math.PI * 1.71, `700 9px ${SERIF}`, PAPER);
+  x.strokeStyle = G; x.lineWidth = 1.2; x.beginPath(); x.moveTo(cx - 20, cy + 46); x.quadraticCurveTo(cx - 48, cy + 58, cx - 66, cy + 50); x.stroke();
+  for (let k = 0; k < 7; k++) { const u = k / 6, px = cx - 24 - u * 40, py = cy + 50 + Math.sin(u * 3) * 4; x.beginPath(); x.ellipse(px, py + (k % 2 ? 5 : -5), 6, 2.6, k % 2 ? 0.5 : -0.5, 0, TAU); x.fillStyle = PAPER; x.fill(); x.stroke(); }
+  for (let k = 0; k < 3; k++) { x.beginPath(); x.moveTo(cx + 20, cy + 44 + k * 3); x.lineTo(cx + 68, cy + 34 + k * 9); x.stroke(); x.beginPath(); x.moveTo(cx + 68, cy + 34 + k * 9); x.lineTo(cx + 61, cy + 31 + k * 9); x.moveTo(cx + 68, cy + 34 + k * 9); x.lineTo(cx + 63, cy + 39 + k * 9); x.stroke(); }
+}
+function drawBack() {
+  const [c, x] = mk();
+  paperBase(c, x, '#cdd5bd', '#d9dfca');
+  fineBackground(x, '42,91,67', 0.2);
+  x.save(); x.beginPath(); x.rect(70, 70, DW - 140, DH - 140); x.clip(); guilloche(x, DW / 2, 440, 360, 70, 130, 36, 'rgba(42,91,67,.2)', 0.7, 0.62); x.restore();
+  lace(x, 22, 56, BGRN, PAPER);
+  [[178, 172], [DW - 178, 172], [178, DH - 172], [DW - 178, DH - 172]].forEach(([a, b]) => rosette(x, a, b, 90, '1', BGRN, PAPER));
+  engravedText(x, 'THE UNITED STATES OF AMERICA', DW / 2, 152, `700 60px ${SERIF}`, BGRN, { ls: '6px', max: 1240, gap: 2.8 });
+  x.save(); x.fillStyle = BGRN; x.font = `700 32px ${SERIF}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.letterSpacing = '10px'; x.fillText('IN GOD WE TRUST', DW / 2 + 5, 266); x.restore();
+  x.save(); x.translate(DW / 2, 448); x.scale(1, 0.62); x.fillStyle = BGRN; x.beginPath(); x.arc(0, 0, 250, 0, TAU); x.fill(); x.restore();
+  x.save(); x.beginPath(); x.ellipse(DW / 2, 448, 250, 155, 0, 0, TAU); x.clip(); for (let k = 0; k < 5; k++) guilloche(x, DW / 2, 448, 248, 40 + k * 6, 48, 40, 'rgba(226,226,209,.5)', 0.7, 0.62); x.restore();
+  x.fillStyle = PAPER; x.beginPath(); x.ellipse(DW / 2, 448, 212, 122, 0, 0, TAU); x.fill(); x.strokeStyle = BGRN; x.lineWidth = 2; x.stroke();
+  engravedText(x, 'ONE', DW / 2, 452, `700 190px ${SERIF}`, BGRN, { gap: 3.4, frac: 0.42, inline: true });
+  pyramid(x, 470, 450, 150, BGRN);
+  eagle(x, DW - 470, 450, 150, BGRN);
+  x.save(); x.fillStyle = BGRN; x.font = `700 26px ${SERIF}`; x.textAlign = 'center'; x.textBaseline = 'middle'; x.letterSpacing = '8px'; x.fillText('THE GREAT', 470, 640); x.fillText('SEAL', DW - 470, 640); x.restore();
+  ribbon(x, DW / 2, 738, 440, 50, 'ONE  DOLLAR', BGRN, PAPER, `700 38px ${SERIF}`);
+  wear(x);
+  return c;
+}
+function drawBump() {
+  const [c, x] = mk(DW, DH, 1);
+  x.fillStyle = 'rgb(128,128,128)'; x.fillRect(0, 0, DW, DH);
+  const id = x.getImageData(0, 0, DW, DH), d = id.data;
+  for (let i = 0; i < d.length; i += 4) { const n = (Math.random() - 0.5) * 26; d[i] = d[i + 1] = d[i + 2] = 128 + n; }
+  x.putImageData(id, 0, 0);
+  const crease = (pts, w, a) => { for (const [off, col] of [[-1.6, `rgba(255,255,255,${a})`], [1.6, `rgba(0,0,0,${a})`]]) { x.save(); x.strokeStyle = col; x.lineWidth = w; x.filter = `blur(${w * 0.7}px)`; x.beginPath(); pts.forEach(([px, py], i) => i ? x.lineTo(px + off, py) : x.moveTo(px + off, py)); x.stroke(); x.restore(); } };
+  crease([[DW / 2 + 6, 0], [DW / 2 - 2, DH * 0.35], [DW / 2 + 5, DH * 0.7], [DW / 2 - 2, DH]], 5, 0.55);
+  crease([[0, DH / 2 + 4], [DW * 0.5, DH / 2], [DW, DH / 2 - 3]], 3, 0.25);
+  for (let i = 0; i < 26; i++) { const px = Math.random() * DW, py = Math.random() * DH, a = Math.random() * TAU, l = 60 + Math.random() * 240; crease([[px, py], [px + Math.cos(a) * l * 0.5 + (Math.random() - .5) * 30, py + Math.sin(a) * l * 0.5], [px + Math.cos(a) * l, py + Math.sin(a) * l]], 2 + Math.random() * 2, 0.12 + Math.random() * 0.12); }
+  crease([[DW - 150, 0], [DW, 110]], 4, 0.4);
+  return c;
+}
+
+/* ================= the bill ================= */
+const PW = 1920, PH = 806;                       // photo coordinate space (scan pixels)
+const POVAL = { cx: 962, cy: 448, rx: 205, ry: 242 }; // portrait oval in photo pixels
+const BW = 3.6, BH = BW * PH / PW, BY = 1.55;
+const st = { t: 0, dt: 0, talk: 0, blink: 0, mx: 0, my: 0, talking: false };
+const bend = (x, y, t) => -0.03 * Math.sqrt(x * x + 0.0016) - 0.012 * Math.sqrt(y * y + 0.0009)
+  + 0.05 * Math.sin(x * 1.15 + t * 1.05) + 0.02 * Math.sin(y * 2.6 + x * 0.8 + t * 1.7)
+  + 0.03 * Math.max(0, x / (BW / 2) - 0.8) ** 2 * 25 * (0.5 + 0.5 * Math.sin(t * 0.8))
+  + st.talk * 0.012 * Math.sin(x * 4 + t * 9);
+function deformer(geo) { const base = geo.attributes.position.array.slice(); return t => { const p = geo.attributes.position.array; for (let i = 0; i < p.length; i += 3) p[i + 2] = bend(base[i], base[i + 1], t); geo.attributes.position.needsUpdate = true; geo.computeVertexNormals(); }; }
+function decal(w, h, cx, cy, zoff, mat) {
+  const g = new THREE.PlaneGeometry(w, h, 24, 30), base = g.attributes.position.array.slice(), m = new THREE.Mesh(g, mat); m.position.set(cx, cy, 0);
+  return { mesh: m, update(t) { const p = g.attributes.position.array; for (let i = 0; i < p.length; i += 3) p[i + 2] = bend(base[i] + cx, base[i + 1] + cy, t) + zoff; g.attributes.position.needsUpdate = true; g.computeVertexNormals(); } };
+}
+const bill = new THREE.Group(); bill.position.y = BY; scene.add(bill);
+let frontMat, backMat, billDef, pDecal = null, photoTex = null, backTex = null;
+const FACE = { uJaw: { value: 0 }, uWide: { value: 0 }, uRound: { value: 0 }, uBlink: { value: 0 }, uBrow: { value: 0 }, uRoll: { value: 0 }, uHead: { value: new THREE.Vector2() } };
+
+function buildBill() {
+  const back = drawBack(), bump = drawBump();
+  const bumpT = new THREE.CanvasTexture(bump), bumpB = new THREE.CanvasTexture(bump); bumpB.wrapS = THREE.RepeatWrapping; bumpB.repeat.x = -1; bumpB.offset.x = 1;
+  const geo = new THREE.PlaneGeometry(BW, BH, 140, 54); billDef = deformer(geo);
+  frontMat = new THREE.MeshPhysicalMaterial({ map: photoTex, bumpMap: bumpT, bumpScale: 1.6, roughness: 0.82, sheen: 0.3, sheenRoughness: 0.8, sheenColor: new THREE.Color(0xffffff), side: THREE.FrontSide });
+  if (backTex) { backTex.wrapS = THREE.RepeatWrapping; backTex.repeat.x = -1; backTex.offset.x = 1; }
+  backMat = new THREE.MeshPhysicalMaterial({ map: backTex || tex(back, true), bumpMap: bumpB, bumpScale: 1.6, roughness: 0.84, sheen: 0.25, sheenRoughness: 0.8, sheenColor: new THREE.Color(0xffffff), side: THREE.BackSide });
+  frontMat.onBeforeCompile = sh => {
+    Object.assign(sh.uniforms, FACE);
+    sh.fragmentShader = sh.fragmentShader
+      .replace('#include <common>', '#include <common>\n' + document.getElementById('warp').textContent)
+      .replace('#include <map_fragment>', `#ifdef USE_MAP
+        float gap; vec2 Q = warpPx(vec2(vMapUv.x, 1.0 - vMapUv.y) * IMG, gap);
+        vec2 quv = vec2(Q.x / IMG.x, 1.0 - Q.y / IMG.y), tx = vec2(1.0 / IMG.x, 0.0), ty = vec2(0.0, 1.0 / IMG.y);
+        vec4 sampledDiffuseColor = texture2D(map, quv) * 1.48 - 0.12 * (texture2D(map, quv + tx) + texture2D(map, quv - tx) + texture2D(map, quv + ty) + texture2D(map, quv - ty));
+        sampledDiffuseColor.rgb = clamp(sampledDiffuseColor.rgb * vec3(0.981, 0.987, 1.061), 0.0, 1.0);
+        float lid = eyeLid(Q);
+        if (lid > 0.0) { vec3 skin = texture2D(map, vec2(Q.x / IMG.x, 1.0 - (Q.y - 6.7) / IMG.y)).rgb; sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb, skin, lid); }
+        vec2 P0 = vec2(vMapUv.x, 1.0 - vMapUv.y) * IMG;
+        float hatch = 0.5 + 0.5 * sin(P0.y * 1.83 + P0.x * 0.22);
+        vec3 inside = mix(vec3(0.012, 0.015, 0.013), vec3(0.07, 0.08, 0.072), hatch * 0.55);
+        sampledDiffuseColor.rgb = mix(sampledDiffuseColor.rgb, inside, gap);
+        sampledDiffuseColor.rgb *= 1.0 - 0.75 * clamp(lashLine(P0), 0.0, 1.0);
+        sampledDiffuseColor.rgb = pow(sampledDiffuseColor.rgb, vec3(1.12)) * vec3(0.9, 0.925, 0.885);
+        diffuseColor *= sampledDiffuseColor;
+      #endif`);
+  };
+  if (backTex) backMat.onBeforeCompile = sh => {
+    sh.fragmentShader = sh.fragmentShader.replace('#include <map_fragment>', `#ifdef USE_MAP
+        vec4 sampledDiffuseColor = texture2D(map, vMapUv);
+        sampledDiffuseColor.rgb = pow(clamp(sampledDiffuseColor.rgb * vec3(0.969, 0.969, 1.061), 0.0, 1.0), vec3(1.12)) * vec3(1.08, 1.11, 1.06);
+        diffuseColor *= sampledDiffuseColor;
+      #endif`);
+  };
+  const f = new THREE.Mesh(geo, frontMat), b = new THREE.Mesh(geo, backMat); f.castShadow = b.castShadow = true; f.receiveShadow = true; bill.add(f, b);
+}
+
+/* ================= camera framing & close-up ================= */
+const view = { mode: 'wide', t: 1, from: null, to: null };
+function wideView() {
+  const a = innerWidth / innerHeight, tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), ui = innerHeight / Math.max(240, innerHeight - 220);
+  const d = Math.max((BH + 0.55) * ui / 2 / tan, BW * 1.08 / 2 / (tan * a)) * 1.02;
+  return { pos: new THREE.Vector3(0, BY + 0.32, d), target: new THREE.Vector3(0, BY - 0.02, 0) };
+}
+function closeView() {
+  const tan = Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)), oh = 2 * POVAL.ry * BW / PW, a = innerWidth / innerHeight;
+  const d = Math.max(oh / 0.62 / 2 / tan, (2 * POVAL.rx * BW / PW) / 0.55 / 2 / (tan * a));
+  const py = BY + (0.5 - POVAL.cy / PH) * BH;
+  return { pos: new THREE.Vector3(0, py + 0.08, d), target: new THREE.Vector3(0, py - 0.02, 0) };
+}
+function goTo(mode) { view.mode = mode; view.from = { pos: camera.position.clone(), target: controls.target.clone() }; view.to = mode === 'close' ? closeView() : wideView(); view.t = 0; document.getElementById('close').classList.toggle('on', mode === 'close'); document.querySelector('.ui').style.opacity = mode === 'close' ? 0 : 1; }
+function snap() { const v = view.mode === 'close' ? closeView() : wideView(); camera.position.copy(v.pos); controls.target.copy(v.target); controls.minDistance = wideView().pos.z * 0.25; controls.maxDistance = wideView().pos.z * 1.6; controls.update(); }
+
+/* ================= speech & lip sync ================= */
+const sub = document.getElementById('sub');
+const LINE = "Good day, everyone. I'm the US dollar. I've been travelling the world since 1944, and I hear some of you have questions about my future, and my friends in BRICS. Ask away.";
+const VIS = {
+  A: { jawOpen: 0.42, mouthLowerDown_L: 0.25, mouthLowerDown_R: 0.25 }, E: { jawOpen: 0.17, mouthStretch_L: 0.35, mouthStretch_R: 0.35 },
+  O: { jawOpen: 0.28, mouthFunnel: 0.55 }, U: { jawOpen: 0.1, mouthPucker: 0.7 }, M: { mouthClose: 0.12, mouthPress_L: 0.5, mouthPress_R: 0.5 },
+  F: { jawOpen: 0.07, mouthRollLower: 0.5, mouthUpperUp_L: 0.2, mouthUpperUp_R: 0.2 }, T: { jawOpen: 0.14, mouthStretch_L: 0.12, mouthStretch_R: 0.12 }, _: {}
+};
+const MOUTH_KEYS = [...new Set(Object.values(VIS).flatMap(v => Object.keys(v)))];
+const visOf = ch => { ch = ch.toLowerCase(); if ('a'.includes(ch)) return 'A'; if ('ei'.includes(ch)) return 'E'; if ('o'.includes(ch)) return 'O'; if ('uwq'.includes(ch)) return 'U'; if ('mbp'.includes(ch)) return 'M'; if ('fv'.includes(ch)) return 'F'; if (/[a-z]/.test(ch)) return 'T'; return '_'; };
+const speech = { text: '', start: 0, cps: 13.5, pos: 0, active: false };
+const mouthW = Object.fromEntries(MOUTH_KEYS.map(k => [k, 0]));
+function pickVoice() { const v = speechSynthesis.getVoices(); return v.find(x => /Daniel|George|Arthur|Google UK English Male|Microsoft (Ryan|Guy|George)/i.test(x.name)) || v.find(x => x.lang === 'en-GB') || v.find(x => x.lang && x.lang.startsWith('en')); }
+let autoClose = false;
+function say(text) {
+  speechSynthesis && speechSynthesis.cancel();
+  speech.text = text; speech.pos = 0; sub.textContent = text; sub.style.opacity = 1;
+  const begin = () => { if (speech.active) return; speech.active = true; st.talking = true; speech.start = performance.now(); };
+  const end = () => { speech.active = false; st.talking = false; sub.style.opacity = 0; if (autoClose) { autoClose = false; setTimeout(() => { if (!st.talking) goTo('wide'); }, 1200); } };
+  if (view.mode !== 'close') { autoClose = true; goTo('close'); }
+  if (!('speechSynthesis' in window)) { begin(); setTimeout(end, text.length / speech.cps * 1000); return; }
+  const u = new SpeechSynthesisUtterance(text); const v = pickVoice(); if (v) u.voice = v; u.rate = 0.93; u.pitch = 0.85;
+  u.onstart = begin; u.onend = u.onerror = end;
+  u.onboundary = e => { if (e.charIndex != null) { speech.pos = e.charIndex; speech.start = performance.now() - e.charIndex / speech.cps * 1000; } };
+  speechSynthesis.speak(u);
+  setTimeout(() => { if (!speech.active && st.talking === false && sub.style.opacity === '1') { begin(); setTimeout(() => { if (speech.active) end(); }, text.length / speech.cps * 1000); } }, 900);
+}
+document.getElementById('speak').onclick = () => say(LINE);
+document.getElementById('close').onclick = () => { autoClose = false; goTo(view.mode === 'close' ? 'wide' : 'close'); };
+addEventListener('pointermove', e => { st.mx = e.clientX / innerWidth * 2 - 1; st.my = -(e.clientY / innerHeight * 2 - 1); });
+window.__dbg = { face: FACE, say, goTo, st, back: () => { view.t = 1; camera.position.set(0.4, BY + 0.3, -wideView().pos.z); controls.update(); }, setTalk: v => { st.talking = v; speech.active = v; speech.text = LINE; speech.start = performance.now(); } };
+
+/* ================= animation ================= */
+const clock = new THREE.Clock(); let last = 0, nextBlink = 2.5, blinkT = -1, brow = 0, browT = 0, sacc = { x: 0, y: 0, t: 0 };
+// moods set by the page wrapper: window.__mood = 'listen' | 'think' | null
+const mood = { listen: 0, think: 0 }, nod = { t: -1, a: 0, next: 0 }; let lastChar = -1;
+function startNod(a) { if (nod.t < 0 || nod.t > 0.25) { nod.t = 0; nod.a = a; } }
+function animate() {
+  const t = clock.getElapsedTime(); st.dt = Math.min(0.05, t - last); last = t; st.t = t;
+  st.talk += ((st.talking ? 1 : 0) - st.talk) * 0.08;
+  if (t > nextBlink && blinkT < 0) blinkT = 0;
+  if (blinkT >= 0) { blinkT += st.dt; st.blink = blinkT < 0.07 ? blinkT / 0.07 : blinkT < 0.16 ? 1 - (blinkT - 0.07) / 0.09 : 0; if (blinkT >= 0.16) { blinkT = -1; st.blink = 0; nextBlink = t + 2.2 + Math.random() * 3.5; } }
+  if (t > sacc.t) { sacc = { x: (Math.random() - 0.5) * 0.14, y: (Math.random() - 0.5) * 0.08, t: t + 0.8 + Math.random() * 2.2 }; }
+  if (st.talking && t > browT) { brow = Math.random() < 0.45 ? 0.5 + Math.random() * 0.5 : 0; browT = t + 0.6 + Math.random() * 1.2; }
+  if (!st.talking) brow *= 0.95;
+  const m = window.__mood || null;
+  mood.listen += ((m === 'listen' && !st.talking ? 1 : 0) - mood.listen) * 0.06;
+  mood.think += ((m === 'think' && !st.talking ? 1 : 0) - mood.think) * 0.06;
+  if (m === 'listen' && !st.talking && t > nod.next) { startNod(0.5 + Math.random() * 0.4); nod.next = t + 2.2 + Math.random() * 2.5; }
+  if (speech.active) {                         // nod at the end of each phrase
+    const ci = Math.floor((performance.now() - speech.start) / 1000 * speech.cps);
+    if (ci !== lastChar) { const c = speech.text[ci] || ''; if (/[.!?]/.test(c)) startNod(1); else if (c === ',' && Math.random() < 0.5) startNod(0.5); lastChar = ci; }
+  }
+  let nodY = 0;
+  if (nod.t >= 0) { nod.t += st.dt; nodY = nod.a * Math.sin(Math.min(1, nod.t / 0.42) * Math.PI); if (nod.t > 0.42) nod.t = -1; }
+  billDef(t);
+  bill.position.y = BY + Math.sin(t * 1.1) * 0.05 + st.talk * Math.abs(Math.sin(t * 4.2)) * 0.02;
+  bill.rotation.y += (st.mx * 0.22 - bill.rotation.y) * 0.04; bill.rotation.x += (-0.08 - st.my * 0.06 - bill.rotation.x) * 0.04; bill.rotation.z = Math.sin(t * 0.7) * 0.025;
+  if (!window.__freezeFace) {
+    const tk = st.talk;
+    // lip sync: text visemes timed to the voice, scaled by the live loudness of the audio when available
+    const target = {};
+    if (speech.active) {
+      const pos = (performance.now() - speech.start) / 1000 * speech.cps, i = Math.floor(pos), f = pos - i;
+      const ch = speech.text[i] || ' ', nx = speech.text[i + 1] || ' ';
+      const a = VIS[visOf(ch)], b = VIS[visOf(nx)];
+      for (const k of MOUTH_KEYS) target[k] = (a[k] || 0) * (1 - f * 0.5) + (b[k] || 0) * f * 0.5;
+      if (/[.,!?;:]/.test(ch)) for (const k of MOUTH_KEYS) target[k] = 0;
+    }
+    for (const k of MOUTH_KEYS) mouthW[k] += ((target[k] || 0) - mouthW[k]) * 0.35;
+    let amp = -1; try { if (window.__amp) amp = window.__amp(); } catch (e) { }
+    let loud = 1;
+    if (amp >= 0) { st.ampS = (st.ampS || 0) + (amp - (st.ampS || 0)) * (amp > (st.ampS || 0) ? 0.55 : 0.25); loud = Math.min(1.3, st.ampS * 9); }
+    const jaw = (mouthW.jawOpen * 2.8 + (mouthW.mouthLowerDown_L || 0) * 0.5) * loud;
+    FACE.uJaw.value = Math.min(1, jaw * (1 - (mouthW.mouthPress_L || 0) * 0.8));
+    FACE.uRound.value = Math.min(1, mouthW.mouthFunnel * 0.9 + mouthW.mouthPucker);
+    FACE.uWide.value = (mouthW.mouthStretch_L || 0) * 2.2;
+    FACE.uBlink.value = st.blink;
+    const L = mood.listen, T = mood.think;
+    if (T > 0.05) FACE.uJaw.value *= 1 - T;    // lips closed while thinking
+    FACE.uBrow.value = Math.min(1, brow * 0.9 + L * 0.35 + T * (0.55 + 0.25 * Math.sin(t * 1.6)));
+    FACE.uHead.value.set(
+      st.mx * 1.8 + tk * 2.2 * Math.sin(t * 1.3) + T * (2.5 + 0.8 * Math.sin(t * 0.7)) - L * 1.0,
+      -st.my * 1.2 + tk * 1.6 * Math.sin(t * 2.3) + 0.6 * Math.sin(t * 0.9) + nodY * 3.2 - T * 3.0 + L * 1.0);
+    FACE.uRoll.value = 0.014 * Math.sin(t * 0.6) + tk * 0.02 * Math.sin(t * 1.7) + L * 0.028 - T * 0.022;
+  }
+  if (view.t < 1 && view.from) { view.t = Math.min(1, view.t + st.dt / 1.2); const e = view.t < 0.5 ? 4 * view.t ** 3 : 1 - (-2 * view.t + 2) ** 3 / 2; camera.position.lerpVectors(view.from.pos, view.to.pos, e); controls.target.lerpVectors(view.from.target, view.to.target, e); }
+  controls.update(); renderer.render(scene, camera); requestAnimationFrame(animate);
+}
+addEventListener('resize', () => { camera.aspect = innerWidth / innerHeight; camera.updateProjectionMatrix(); renderer.setSize(innerWidth, innerHeight); snap(); });
+let hintTimer = setTimeout(() => document.getElementById('hint').style.opacity = 0, 7000);
+controls.addEventListener('start', () => { clearTimeout(hintTimer); document.getElementById('hint').style.opacity = 0; });
+
+/* ================= boot ================= */
+const fonts = ['700 40px "Old Standard TT"', '400 40px "Old Standard TT"', 'italic 400 20px "Old Standard TT"', '400 40px "Mrs Saint Delafield"'].map(f => document.fonts.load(f).catch(() => { }));
+await Promise.race([Promise.all(fonts), new Promise(r => setTimeout(r, 4000))]);
+async function loadBill(side) {
+  for (const url of ['api/bill?side=' + side, 'https://cdn.jsdelivr.net/gh/achrafbouisk/mr-dollar-assets@main/' + side + '.jpg']) {
+    try { return await new THREE.TextureLoader().loadAsync(url); } catch (e) { console.warn('bill image failed: ' + url, e); }
+  }
+  return null;
+}
+[photoTex, backTex] = await Promise.all([loadBill('front'), loadBill('back')]);
+if (backTex) { backTex.colorSpace = THREE.SRGBColorSpace; backTex.anisotropy = ANISO; }
+photoTex.colorSpace = THREE.SRGBColorSpace; photoTex.anisotropy = ANISO;
+buildBill(); snap(); window.__portraitReady = true;
+document.getElementById('load').style.opacity = 0; window.__ready = true;
+animate();
+
+</script>
+</body>
+</html>

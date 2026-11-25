@@ -1,0 +1,358 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Mr. Dollar – Interview en direct</title>
+<style>
+  html,body{margin:0;height:100%;overflow:hidden;background:#0b0b0a}
+  iframe{position:fixed;inset:0;width:100%;height:100%;border:0;display:block}
+</style>
+</head>
+<body>
+<iframe id="stage" src="stage.html" title="Mr. Dollar" allow="microphone; autoplay"></iframe>
+<script>
+(() => {
+  const frame = document.getElementById('stage');
+  const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  const history = [];
+  let W, D, sub, askBtn, input, sendBtn, rec = null, listening = false, busy = false, heard = '';
+  const TXT = {
+    fr: { ask: '&#127908; Poser une question', listen: '&#9679; J’écoute… touchez pour envoyer', busy: '&#8230; Réflexion', ph: 'Écrivez une question pour Monsieur Dollar…', send: 'Envoyer',
+      thinking: 'Monsieur Dollar réfléchit…', listening: 'J’écoute…', noSR: 'La saisie vocale nécessite Chrome, Edge ou Safari. Écrivez ici…',
+      blocked: 'Micro bloqué. Autorisez le micro dans la barre d’adresse, ou écrivez votre question.', noSpeech: 'Je n’ai pas bien entendu. Touchez le bouton et réessayez.',
+      oops: 'Pardonnez-moi, mes pensées se sont égarées en chemin. Pourriez-vous reposer la question ?', speak: '&#9654; L’entendre parler', close: '&#128269; Gros plan',
+      tag: 'Billet de la Réserve fédérale &middot; Monnaie de réserve mondiale depuis 1944', sr: 'fr-FR',
+      intro: 'Bonjour à tous. Je suis le dollar américain. Je parcours le monde depuis 1944, et il paraît que certains d’entre vous ont des questions sur mon avenir, et sur mes amis des BRICS. Je vous écoute.' },
+    en: { ask: '&#127908; Ask a question', listen: '&#9679; Listening… tap to send', busy: '&#8230; Thinking', ph: 'Type a question for Mr. Dollar…', send: 'Ask',
+      thinking: 'Mr. Dollar is thinking…', listening: 'Listening…', noSR: 'Voice input needs Chrome, Edge or Safari. Type here instead…',
+      blocked: 'Microphone blocked. Allow the mic in the address bar, or type your question.', noSpeech: 'I didn’t catch that. Tap the button and try again.',
+      oops: 'Forgive me, my thoughts seem to have got lost in transit. Could you ask me that once more?', speak: '&#9654; Hear him speak', close: '&#128269; Close-up',
+      tag: 'Federal Reserve Note &middot; World Reserve Currency since 1944', sr: 'en-US',
+      intro: 'Good day, everyone. I’m the US dollar. I’ve been travelling the world since 1944, and I hear some of you have questions about my future, and my friends in BRICS. Ask away.' }
+  };
+  let lang = 'fr';
+  try { const l = localStorage.getItem('mrDollarLang'); if (TXT[l]) lang = l; } catch (e) {}
+  const T = () => TXT[lang];
+
+  const CSS = `
+    #sub{bottom:150px !important}
+    .askrow{flex-basis:100%;display:flex;justify-content:center;gap:8px;margin-bottom:2px}
+    .askrow input{width:min(460px,calc(100vw - 150px));font-family:inherit;font-size:15px;padding:11px 16px;border-radius:30px;border:1px solid rgba(217,178,95,.55);background:rgba(16,15,13,.72);color:#f1ead6;outline:none;backdrop-filter:blur(6px)}
+    .askrow input::placeholder{color:rgba(241,234,214,.5);font-style:italic}
+    .askrow input:focus{border-color:#d9b25f}
+    .bar button.listen{background:#b8412f !important;border-color:#e07a5f !important;color:#fff !important;animation:pulse 1.2s ease-in-out infinite}
+    @keyframes pulse{50%{box-shadow:0 0 0 8px rgba(224,122,95,.18)}}
+    #qline{position:fixed;left:50%;top:22px;transform:translateX(-50%);max-width:min(760px,calc(100vw - 32px));box-sizing:border-box;text-align:center;font-size:17px;font-style:italic;color:#e8c77a;background:rgba(10,10,9,.72);padding:8px 18px;border-radius:12px;opacity:0;transition:opacity .4s;pointer-events:none}
+    #picks{position:fixed;right:14px;top:14px;z-index:20;display:flex;gap:6px}
+    #picks select{font-family:inherit;font-size:13px;padding:6px 10px;border-radius:20px;border:1px solid rgba(217,178,95,.45);background:rgba(16,15,13,.72);color:#e8dcbc;outline:none;cursor:pointer;opacity:.55;transition:opacity .3s}
+    #picks select:hover,#picks select:focus{opacity:1}
+    #picks option{background:#16140f;color:#f1ead6}`;
+
+  function setSub(text, show = true) { sub.textContent = text; sub.style.opacity = show ? 1 : 0; }
+  function setQ(text) { const q = D.getElementById('qline'); q.textContent = text ? '“' + text + '”' : ''; q.style.opacity = text ? 1 : 0; }
+  function setBtn(state) {
+    askBtn.classList.toggle('listen', state === 'listen');
+    askBtn.disabled = state === 'busy';
+    askBtn.innerHTML = state === 'listen' ? T().listen : state === 'busy' ? T().busy : T().ask;
+    sendBtn.disabled = state === 'busy';
+  }
+
+  async function ask(q) {
+    q = (q || '').trim();
+    if (!q || busy) return;
+    busy = true; setBtn('busy'); speakToken++;
+    try { W.speechSynthesis && W.speechSynthesis.cancel(); W.__dbg.setTalk(false); } catch (e) {}
+    setQ(q); setSub(T().thinking); W.__mood = 'think';
+    try { W.__dbg.goTo('close'); } catch (e) {}
+    const answerP = fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q, history, lang }) })
+      .then(r => r.json().then(j => { if (!r.ok || !j.answer) throw new Error(j.error || 'HTTP ' + r.status); return j.answer; }))
+      .then(answer => { history.push({ role: 'user', content: q }, { role: 'assistant', content: answer }); while (history.length > 12) history.shift(); return answer; })
+      .catch(e => { console.warn('ask failed', e); return T().oops; });
+    const filler = pickFiller(q);
+    const fillerDone = filler ? sayAndWait(filler) : Promise.resolve();   // instant human reaction
+    const answer = await answerP;
+    prefetch(answer);                    // his voice for the answer is generated while the filler plays
+    await fillerDone;
+    busy = false; setBtn('idle');
+    await speak(answer);
+    if (!listening) W.__mood = null;
+    setQ('');
+  }
+  async function sayAndWait(text) {
+    lastFiller = text;
+    const my = speakToken;
+    W.__dbg.say(text);
+    await sleep(200);
+    const synth = W.speechSynthesis;
+    while (my === speakToken && (W.__dbg.st.talking || (synth && (synth.speaking || synth.pending)))) await sleep(80);
+  }
+
+  // speak sentence by sentence (avoids Chrome's ~15 s speech cut-off, gives readable subtitles)
+  let speakToken = 0;
+  const sleep = ms => new Promise(r => setTimeout(r, ms));
+  function sentences(t) {
+    const parts = (t.match(/[^.!?]+[.!?]+["')\]]*\s*|[^.!?]+$/g) || [t]).map(x => x.trim()).filter(Boolean), out = [];
+    for (const x of parts) { if (out.length && (out[out.length - 1].length < 45 || x.length < 25)) out[out.length - 1] += ' ' + x; else out.push(x); }
+    return out;
+  }
+  // one voice request per answer (the free Gemini tier allows few requests per day);
+  // subtitles still change sentence by sentence while he speaks
+  function chunks(text) { return [text.trim()]; }
+  async function speak(text) {
+    const my = ++speakToken, parts = chunks(text);
+    parts.forEach(prefetch);
+    for (const line of parts) {
+      if (my !== speakToken) return;
+      W.__dbg.say(line);
+      await sleep(1300);
+      const synth = W.speechSynthesis, busyVoice = () => W.__dbg.st.talking || (synth && (synth.speaking || synth.pending));
+      if (!busyVoice()) {                  // no speech voice available: animate silently with subtitles
+        W.__dbg.setTalk(true); setSub(line);
+        await sleep(Math.max(1800, line.length / 13.5 * 1000));
+        W.__dbg.setTalk(false); setSub('', false);
+      } else {
+        while (my === speakToken && busyVoice()) await sleep(100);
+      }
+      await sleep(120);
+    }
+  }
+
+  // Listening keeps going through pauses and "euh…": it sends when the presenter taps again (or presses Space),
+  // or after a few seconds of real silence (longer if the sentence obviously isn't finished).
+  const DANGLE = /^(euh+|heu+|hum+|hmm+|ben|bah|bon|donc|alors|et|ou|mais|de|du|des|d|le|la|les|l|un|une|à|au|aux|en|pour|sur|avec|dans|par|que|qui|quoi|quel|quelle|comment|pourquoi|est-ce|est|c|qu|si|um+|uh+|so|and|or|but|the|a|an|of|to|in|on|for|with|is|are|what|why|how|which)$/;
+  let silenceTimer = null, userStop = false, base = '';
+  function armSilence() {
+    clearTimeout(silenceTimer);
+    const words = heard.toLowerCase().replace(/[.,!?…;:"«»]/g, ' ').split(/[\s']+/).filter(Boolean);
+    const last = words[words.length - 1] || '';
+    const ms = !heard ? 9000 : DANGLE.test(last) ? 5500 : 3000;
+    silenceTimer = setTimeout(() => stopListening(), ms);
+  }
+  function startListening() {
+    if (!SR) { input.focus(); input.placeholder = T().noSR; return; }
+    if (busy) return;
+    speakToken++;
+    try { W.speechSynthesis && W.speechSynthesis.cancel(); W.__dbg.setTalk(false); } catch (e) {}
+    heard = ''; base = ''; userStop = false; listening = true;
+    setBtn('listen'); setQ(''); setSub(T().listening); W.__mood = 'listen';
+    try { W.__dbg.goTo('close'); } catch (e) {}
+    const begin = () => {
+      rec = new SR(); rec.lang = T().sr; rec.interimResults = true; rec.continuous = true; rec.maxAlternatives = 1;
+      rec.onresult = e => {
+        let t = '';
+        for (let i = 0; i < e.results.length; i++) t += e.results[i][0].transcript;
+        heard = (base + ' ' + t).replace(/\s+/g, ' ').trim();
+        setSub(heard || T().listening); armSilence();
+      };
+      rec.onerror = e => {
+        if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { userStop = true; setSub(T().blocked); }
+      };
+      rec.onend = () => {
+        if (listening && !userStop) { base = heard; try { begin(); return; } catch (e) {} }   // the browser stopped by itself: keep listening
+        finishListening();
+      };
+      rec.start();
+    };
+    try { begin(); armSilence(); } catch (e) { listening = false; setBtn('idle'); W.__mood = null; }
+  }
+  function stopListening() { userStop = true; clearTimeout(silenceTimer); if (rec) try { rec.stop(); } catch (e) { finishListening(); } }
+  function finishListening() {
+    if (!listening) return;
+    listening = false; clearTimeout(silenceTimer); setBtn(busy ? 'busy' : 'idle');
+    if (heard.trim()) ask(heard);
+    else { W.__mood = null; if (sub.textContent === T().listening) setSub(T().noSpeech); setTimeout(() => { if (!listening && !busy && sub.textContent === T().noSpeech) setSub('', false); }, 2500); }
+  }
+
+  // ---------- instant reactions ("fillers"), recorded once in his voice and cached by the CDN ----------
+  const FILLERS = {
+    fr: { big: ['Très bonne question…', 'Ah, voilà une question intéressante…', 'Hmm… laissez-moi réfléchir.', 'Bonne question, vraiment.'],
+          small: ['Alors…', 'Eh bien…', 'Hmm, voyons voir…'], brics: ['Ah, les BRICS…'] },
+    en: { big: ['Very good question…', 'Now, that is an interesting one…', 'Hmm… let me think.', 'Good question, really.'],
+          small: ['Well…', 'Let me see…', 'Hmm, let us see…'], brics: ['Ah, BRICS…'] }
+  };
+  const GREET = /^(bonjour|bonsoir|salut|coucou|hello|hi|hey|good (morning|afternoon|evening)|merci|thanks|thank you|au revoir|bye|ça va|comment (ça va|allez-vous|vas-tu)|how are you)\b/i;
+  const fillerReady = new Set();
+  let lastFiller = '';
+  const isFiller = text => Object.values(FILLERS[lang]).some(pool => pool.includes(text));
+  const fillerUrl = text => '/api/tts?cache=1&v=1&lang=' + lang + '&voice=' + encodeURIComponent(voice) + '&text=' + encodeURIComponent(text);
+  function pickFiller(q) {
+    if (voice === 'browser') return null;
+    const s = q.trim().toLowerCase(), n = s.split(/\s+/).length, F = FILLERS[lang];
+    if (GREET.test(s) || n <= 3) return null;
+    let pool = /\b(pourquoi|comment|expliqu\w*|pensez|penses|avis|croyez|crois|why|how|explain|think|opinion)\b/.test(s) ? F.big : (Math.random() < 0.3 ? null : F.small);
+    if (/\bbrics\b/.test(s) && Math.random() < 0.35) pool = F.brics;
+    if (!pool) return null;
+    const ok = pool.filter(x => x !== lastFiller && fillerReady.has(voice + '|' + lang + '|' + x));
+    return ok.length ? ok[Math.floor(Math.random() * ok.length)] : null;
+  }
+  let warmGen = 0;
+  async function prefetchFillers() {          // one at a time, gently, so we never hit the per-minute voice limit
+    const my = ++warmGen;
+    if (voice === 'browser') return;
+    const all = [].concat(...Object.values(FILLERS[lang]));
+    for (const text of all) {
+      for (let attempt = 0; attempt < 3 && my === warmGen; attempt++) {
+        try { await fetchVoice(text); fillerReady.add(voice + '|' + lang + '|' + text); break; }
+        catch (e) { await sleep(25000); }
+      }
+      await sleep(400);
+    }
+  }
+
+  // ---------- Mr. Dollar's voice: Gemini TTS behind a speechSynthesis look-alike ----------
+  const VOICES = [['Charon', 'Voix : Charon – grave, posée'], ['Gacrux', 'Voix : Gacrux – mûre'], ['Algenib', 'Voix : Algenib – rocailleuse'], ['Orus', 'Voix : Orus – ferme'], ['Sadaltager', 'Voix : Sadaltager – savante'], ['Iapetus', 'Voix : Iapetus – claire'], ['Rasalgethi', 'Voix : Rasalgethi – narrateur'], ['browser', 'Voix du navigateur (hors ligne)']];
+  const PRON = {
+    en: [[/\bBRICS\+/g, 'Bricks plus'], [/\bBRICS\b/g, 'Bricks'], [/\bSWIFT\b/g, 'Swift'], [/\bOPEC\b/g, 'Oh-peck'], [/\bUSD\b/g, 'U.S. dollar'], [/\bUS\b/g, 'U.S.'], [/\bIMF\b/g, 'I.M.F.'], [/\bGDP\b/g, 'G.D.P.']],
+    fr: [[/\bBRICS\s?\+/g, 'Brics plus'], [/\bBRICS\b/g, 'Brics'], [/\bOPEP\b/g, 'Opep'], [/\bOPEC\b/g, 'Opep'], [/\bSWIFT\b/g, 'Swift'], [/\bUSD\b/g, 'dollars américains'], [/\bMr\.? Dollar\b/g, 'Monsieur Dollar']]
+  };
+  const fixPron = t => PRON[lang].reduce((s, [a, b]) => s.replace(a, b), t);
+  let voice = 'Charon';
+  try { const v = localStorage.getItem('mrDollarVoice'); if (VOICES.some(x => x[0] === v)) voice = v; } catch (e) {}
+  let actx = null;
+  function audioCtx() {
+    if (!actx) { const AC = window.AudioContext || window.webkitAudioContext; if (AC) actx = new AC(); }
+    if (actx && actx.state === 'suspended') actx.resume().catch(() => {});
+    return actx;
+  }
+  const cache = new Map();   // voice|text -> Promise<AudioBuffer>
+  function fetchVoice(text) {
+    const k = voice + '|' + lang + '|' + text;
+    if (!cache.has(k)) {
+      const p = (isFiller(text) ? fetch(fillerUrl(text)) : fetch('/api/tts', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text, voice, lang }) }))
+        .then(r => { if (!r.ok) throw new Error('tts ' + r.status); return r.arrayBuffer(); })
+        .then(buf => new Promise((ok, bad) => { const c = audioCtx(); if (!c) return bad(new Error('no audio')); const q = c.decodeAudioData(buf, ok, bad); if (q && q.then) q.then(ok, bad); }));
+      p.catch(() => cache.delete(k));
+      cache.set(k, p); if (cache.size > 40) cache.delete(cache.keys().next().value);
+    }
+    return cache.get(k);
+  }
+  function prefetch(text) { if (voice !== 'browser') fetchVoice(text).catch(() => {}); }
+
+  function makeSynth(real) {
+    let gen = 0, src = null, cur = null, tick = null, analyser = null;
+    const S = { speaking: false, pending: false, paused: false, onvoiceschanged: null };
+    const finish = (u, g) => {
+      if (g !== gen) return;
+      clearInterval(tick); tick = null; src = null; cur = null; S.speaking = false; S.pending = false;
+      if (u && u.onend) try { u.onend({}); } catch (e) {}
+    };
+    function browserSay(u, g) {
+      if (!real || !W.SpeechSynthesisUtterance) { S.pending = false; return; }   // stage's own silent fallback takes over
+      const r = new W.SpeechSynthesisUtterance(fixPron(u.text));
+      const vs = real.getVoices();
+      const pick = lang === 'fr'
+        ? vs.find(x => /Microsoft (Henri|Remy|Rémy|Paul|Claude|Jerome|Jérôme).*Natural/i.test(x.name)) || vs.find(x => /Thomas|Microsoft (Paul|Claude)|Google français/i.test(x.name)) || vs.find(x => x.lang === 'fr-FR') || vs.find(x => x.lang && x.lang.startsWith('fr'))
+        : vs.find(x => /Microsoft (Guy|Christopher|Davis|Andrew|Brian).*Natural/i.test(x.name)) || vs.find(x => /Google UK English Male|Daniel|Microsoft (Guy|George|Ryan)/i.test(x.name)) || vs.find(x => x.lang === 'en-US') || vs.find(x => x.lang && x.lang.startsWith('en'));
+      r.lang = T().sr; if (pick) r.voice = pick; r.rate = 0.95; r.pitch = 0.8;
+      r.onstart = () => { if (g !== gen) return; S.pending = false; S.speaking = true; sub.textContent = u.text; sub.style.opacity = 1; u.onstart && u.onstart({}); };
+      r.onboundary = e => { if (g === gen && u.onboundary) u.onboundary({ charIndex: Math.min(u.text.length, Math.round(e.charIndex / Math.max(1, r.text.length) * u.text.length)) }); };
+      r.onend = r.onerror = () => finish(u, g);
+      real.speak(r);
+    }
+    S.speak = u => {
+      S.cancel();
+      const g = ++gen; cur = u; S.pending = true;
+      const text = String(u.text || '');
+      sub.style.opacity = '0.999';           // keeps the stage's 900 ms "no voice" fallback from starting
+      sub.textContent = T().thinking;        // no subtitle until he actually starts speaking
+      if (voice === 'browser') return browserSay(u, g);
+      fetchVoice(text).then(buf => {
+        if (g !== gen) return;
+        const c = audioCtx();
+        src = c.createBufferSource(); src.buffer = buf;
+        if (!analyser) { analyser = c.createAnalyser(); analyser.fftSize = 1024; analyser.connect(c.destination); }
+        src.connect(analyser);
+        const samples = new Float32Array(analyser.fftSize);
+        W.__amp = () => { if (!S.speaking || !src) return -1; analyser.getFloatTimeDomainData(samples); let e = 0; for (let i = 0; i < samples.length; i++) e += samples[i] * samples[i]; return Math.sqrt(e / samples.length); };
+        const lines = sentences(text), t0 = c.currentTime + 0.05, dur = buf.duration;
+        S.pending = false; S.speaking = true; sub.style.opacity = 1;
+        sub.textContent = lines.length > 1 ? lines[0] : text;
+        u.onstart && u.onstart({});
+        tick = setInterval(() => {
+          if (g !== gen) return;
+          const p = Math.min(1, Math.max(0, (c.currentTime - t0) / dur)), ci = Math.round(p * text.length);
+          u.onboundary && u.onboundary({ charIndex: ci, name: 'word' });
+          if (lines.length > 1) { let acc = 0, line = lines[0]; for (const l of lines) { line = l; acc += l.length + 1; if (acc > ci) break; } if (sub.textContent !== line) sub.textContent = line; }
+        }, 90);
+        src.onended = () => finish(u, g);
+        src.start(t0);
+      }).catch(err => { console.warn('Gemini voice unavailable, using browser voice', err); if (g === gen) browserSay(u, g); });
+    };
+    S.cancel = () => {
+      const u = cur; gen++;
+      clearInterval(tick); tick = null;
+      if (src) { try { src.onended = null; src.stop(); } catch (e) {} src = null; }
+      try { real && real.cancel(); } catch (e) {}
+      const was = S.speaking || S.pending;
+      S.speaking = false; S.pending = false; cur = null;
+      if (u && was && u.onend) try { u.onend({}); } catch (e) {}
+    };
+    S.pause = () => { if (actx) actx.suspend(); };
+    S.resume = () => { if (actx) actx.resume(); };
+    S.getVoices = () => [];
+    S.addEventListener = S.removeEventListener = () => {};
+    return S;
+  }
+  function installVoice() {
+    let real = null; try { real = W.speechSynthesis || null; } catch (e) {}
+    const fake = makeSynth(real);
+    try { Object.defineProperty(W, 'speechSynthesis', { configurable: true, get: () => fake }); } catch (e) { console.warn('could not install voice', e); }
+    if (!W.SpeechSynthesisUtterance) W.SpeechSynthesisUtterance = function (t) { this.text = t || ''; };
+    const unlock = () => audioCtx();
+    for (const d of [document, D]) { d.addEventListener('pointerdown', unlock, true); d.addEventListener('keydown', unlock, true); }
+    // language + voice pickers, top-right corner
+    const box = D.createElement('div'); box.id = 'picks'; D.body.appendChild(box);
+    const lp = D.createElement('select'); lp.id = 'langpick'; lp.title = 'Langue / Language';
+    lp.innerHTML = '<option value="fr">Français</option><option value="en">English</option>'; lp.value = lang;
+    lp.addEventListener('change', () => { lang = lp.value; try { localStorage.setItem('mrDollarLang', lang); } catch (e) {} applyLang(); prefetchFillers(); });
+    box.appendChild(lp);
+    const pick = D.createElement('select'); pick.id = 'voicepick'; pick.title = "Mr. Dollar's voice";
+    pick.innerHTML = VOICES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+    pick.value = voice;
+    pick.addEventListener('change', () => { voice = pick.value; try { localStorage.setItem('mrDollarVoice', voice); } catch (e) {} prefetchFillers(); });
+    box.appendChild(pick);
+  }
+  function applyLang() {
+    D.documentElement.lang = lang;
+    D.getElementById('speak').innerHTML = T().speak;
+    D.getElementById('close').innerHTML = T().close;
+    const tag = D.querySelector('.ui p'); if (tag) tag.innerHTML = T().tag;
+    input.placeholder = T().ph; sendBtn.textContent = T().send;
+    setBtn(busy ? 'busy' : 'idle');
+    if (listening) stopListening();
+  }
+
+  function wire() {
+    W = frame.contentWindow; D = frame.contentDocument;
+    installVoice();
+    sub = D.getElementById('sub');
+    const st = D.createElement('style'); st.textContent = CSS; D.head.appendChild(st);
+    const ql = D.createElement('div'); ql.id = 'qline'; D.body.appendChild(ql);
+    askBtn = D.querySelector('.bar button[disabled]');
+    askBtn.removeAttribute('title');
+    const bar = D.querySelector('.bar');
+    const form = D.createElement('form'); form.className = 'askrow';
+    form.innerHTML = '<input type="text" maxlength="400" placeholder="Type a question for Mr. Dollar…" aria-label="Question"><button type="submit">Ask</button>';
+    bar.insertBefore(form, bar.firstChild);
+    input = form.querySelector('input'); sendBtn = form.querySelector('button');
+    form.addEventListener('submit', e => { e.preventDefault(); const q = input.value; input.value = ''; input.blur(); ask(q); });
+    askBtn.addEventListener('click', () => listening ? stopListening() : startListening());
+    D.getElementById('speak').onclick = () => { speakToken++; W.__dbg.say(T().intro); };
+    applyLang();
+    const key = e => {
+      if (e.code !== 'Space' || e.repeat) return;
+      const t = (e.target && e.target.tagName) || ''; if (t === 'INPUT' || t === 'TEXTAREA') return;
+      e.preventDefault(); listening ? stopListening() : startListening();
+    };
+    D.addEventListener('keydown', key); document.addEventListener('keydown', key);
+    window.__ask = ask;
+    setTimeout(prefetchFillers, 1500);
+  }
+  frame.addEventListener('load', () => {
+    const wait = setInterval(() => { const w = frame.contentWindow; if (w && w.__ready && w.__dbg) { clearInterval(wait); wire(); } }, 200);
+  });
+})();
+</script>
+</body>
+</html>
