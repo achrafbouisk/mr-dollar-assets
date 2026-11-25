@@ -44,7 +44,8 @@
     .bar button.listen{background:#b8412f !important;border-color:#e07a5f !important;color:#fff !important;animation:pulse 1.2s ease-in-out infinite}
     @keyframes pulse{50%{box-shadow:0 0 0 8px rgba(224,122,95,.18)}}
     #qline{position:fixed;left:50%;top:22px;transform:translateX(-50%);max-width:min(760px,calc(100vw - 32px));box-sizing:border-box;text-align:center;font-size:17px;font-style:italic;color:#e8c77a;background:rgba(10,10,9,.72);padding:8px 18px;border-radius:12px;opacity:0;transition:opacity .4s;pointer-events:none}
-    #picks{position:fixed;right:14px;top:14px;z-index:20;display:flex;gap:6px}
+    #picks{position:fixed;right:14px;top:14px;z-index:20;display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+    @media (max-width:700px){#picks{top:auto;bottom:150px}}
     #picks select{font-family:inherit;font-size:13px;padding:6px 10px;border-radius:20px;border:1px solid rgba(217,178,95,.45);background:rgba(16,15,13,.72);color:#e8dcbc;outline:none;cursor:pointer;opacity:.55;transition:opacity .3s}
     #picks select:hover,#picks select:focus{opacity:1}
     #picks option{background:#16140f;color:#f1ead6}`;
@@ -70,7 +71,7 @@
       history.push({ role: 'user', content: q }, { role: 'assistant', content: quick });
       busy = false; setBtn('idle'); await speak(quick); if (!listening) W.__mood = null; setQ(''); return;
     }
-    const answerP = fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q, history, lang }) })
+    const answerP = fetch('/api/ask', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ question: q, history, lang, provider: brain }) })
       .then(r => r.json().then(j => { if (!r.ok || !j.answer) throw new Error(j.error || 'HTTP ' + r.status); return j.answer; }))
       .then(answer => { history.push({ role: 'user', content: q }, { role: 'assistant', content: answer }); while (history.length > 12) history.shift(); return answer; })
       .catch(e => { console.warn('ask failed', e); return T().oops; });
@@ -221,7 +222,10 @@
   }
 
   // ---------- Mr. Dollar's voice: Gemini TTS behind a speechSynthesis look-alike ----------
-  const VOICES = [['Charon', 'Voix : Charon – grave, posée'], ['Gacrux', 'Voix : Gacrux – mûre'], ['Algenib', 'Voix : Algenib – rocailleuse'], ['Orus', 'Voix : Orus – ferme'], ['Sadaltager', 'Voix : Sadaltager – savante'], ['Iapetus', 'Voix : Iapetus – claire'], ['Rasalgethi', 'Voix : Rasalgethi – narrateur'], ['browser', 'Voix du navigateur (hors ligne)']];
+  const VOICES = [['Charon', 'Voix : Charon – grave, posée'], ['Gacrux', 'Voix : Gacrux – mûre'], ['Algenib', 'Voix : Algenib – rocailleuse'], ['Orus', 'Voix : Orus – ferme'], ['Sadaltager', 'Voix : Sadaltager – savante'], ['Iapetus', 'Voix : Iapetus – claire'], ['Rasalgethi', 'Voix : Rasalgethi – narrateur'], ['oa-onyx', 'OpenAI : Onyx – grave'], ['oa-ash', 'OpenAI : Ash – posée'], ['oa-ballad', 'OpenAI : Ballad – chaleureuse'], ['oa-echo', 'OpenAI : Echo – claire'], ['oa-verse', 'OpenAI : Verse – expressive'], ['browser', 'Voix du navigateur (hors ligne)']];
+  const BRAINS = [['gemini', 'Cerveau : Google Gemini'], ['openai', 'Cerveau : OpenAI']];
+  let brain = 'gemini', keys = { gemini: true, openai: false };
+  try { const b = localStorage.getItem('mrDollarBrain'); if (BRAINS.some(x => x[0] === b)) brain = b; } catch (e) {}
   const PRON = {
     en: [[/\bBRICS\+/g, 'Bricks plus'], [/\bBRICS\b/g, 'Bricks'], [/\bSWIFT\b/g, 'Swift'], [/\bOPEC\b/g, 'Oh-peck'], [/\bUSD\b/g, 'U.S. dollar'], [/\bUS\b/g, 'U.S.'], [/\bIMF\b/g, 'I.M.F.'], [/\bGDP\b/g, 'G.D.P.']],
     fr: [[/\bBRICS\s?\+/g, 'Brics plus'], [/\bBRICS\b/g, 'Brics'], [/\bOPEP\b/g, 'Opep'], [/\bOPEC\b/g, 'Opep'], [/\bSWIFT\b/g, 'Swift'], [/\bUSD\b/g, 'dollars américains'], [/\bMr\.? Dollar\b/g, 'Monsieur Dollar']]
@@ -328,10 +332,26 @@
     lp.addEventListener('change', () => { lang = lp.value; try { localStorage.setItem('mrDollarLang', lang); } catch (e) {} applyLang(); prefetchFillers(); });
     box.appendChild(lp);
     const pick = D.createElement('select'); pick.id = 'voicepick'; pick.title = "Mr. Dollar's voice";
-    pick.innerHTML = VOICES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('');
+    const opt = ([v, l]) => `<option value="${v}">${l}</option>`;
+    pick.innerHTML = '<optgroup label="Google Gemini">' + VOICES.filter(x => !/^oa-|browser/.test(x[0])).map(opt).join('') + '</optgroup>'
+      + '<optgroup label="OpenAI">' + VOICES.filter(x => /^oa-/.test(x[0])).map(opt).join('') + '</optgroup>'
+      + VOICES.filter(x => x[0] === 'browser').map(opt).join('');
     pick.value = voice;
     pick.addEventListener('change', () => { voice = pick.value; try { localStorage.setItem('mrDollarVoice', voice); } catch (e) {} prefetchFillers(); });
-    box.appendChild(pick);
+    const bp = D.createElement('select'); bp.id = 'brainpick'; bp.title = "Mr. Dollar's brain";
+    bp.innerHTML = BRAINS.map(opt).join(''); bp.value = brain;
+    bp.addEventListener('change', () => { brain = bp.value; try { localStorage.setItem('mrDollarBrain', brain); } catch (e) {} });
+    box.appendChild(bp); box.appendChild(pick);
+    // grey out OpenAI until its key is configured on the server
+    fetch('/api/ask?status=1').then(r => r.json()).then(k => {
+      keys = k;
+      if (!k.openai) {
+        const note = ' (clé manquante)';
+        [...pick.querySelectorAll('option'), ...bp.querySelectorAll('option')].forEach(o => { if (/^oa-|^openai$/.test(o.value)) { o.disabled = true; o.textContent += note; } });
+        if (/^oa-/.test(voice)) { voice = 'Charon'; pick.value = voice; }
+        if (brain === 'openai') { brain = 'gemini'; bp.value = brain; }
+      }
+    }).catch(() => {});
   }
   function applyLang() {
     D.documentElement.lang = lang;
