@@ -386,7 +386,7 @@
     input = form.querySelector('input'); sendBtn = form.querySelector('button');
     form.addEventListener('submit', e => { e.preventDefault(); const q = input.value; input.value = ''; input.blur(); ask(q); });
     askBtn.addEventListener('click', () => listening ? stopListening() : startListening());
-    D.getElementById('speak').onclick = () => { speakToken++; W.__dbg.say(T().intro); };
+    D.getElementById('speak').style.display = 'none';   // "L'entendre parler" button removed from the page
     applyLang();
     const typing = e => { const t = (e.target && e.target.tagName) || ''; return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT'; };
     const key = e => {
