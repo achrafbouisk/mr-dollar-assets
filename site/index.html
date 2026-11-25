@@ -21,13 +21,13 @@
     fr: { ask: '&#127908; Poser une question', listen: '&#9679; J’écoute… touchez pour envoyer', busy: '&#8230; Réflexion', ph: 'Écrivez une question pour Monsieur Dollar…', send: 'Envoyer',
       thinking: 'Monsieur Dollar réfléchit…', listening: 'J’écoute…', noSR: 'La saisie vocale nécessite Chrome, Edge ou Safari. Écrivez ici…',
       blocked: 'Micro bloqué. Autorisez le micro dans la barre d’adresse, ou écrivez votre question.', noSpeech: 'Je n’ai pas bien entendu. Touchez le bouton et réessayez.',
-      oops: 'Pardonnez-moi, mes pensées se sont égarées en chemin. Pourriez-vous reposer la question ?', speak: '&#9654; L’entendre parler', close: '&#128269; Gros plan',
+      oops: 'Pardonnez-moi, mes pensées se sont égarées en chemin. Pourriez-vous reposer la question ?', speak: '&#9654; L’entendre parler', full: '&#x26F6; Plein écran', exitFull: '&#x2715; Quitter le plein écran', close: '&#128269; Gros plan',
       tag: 'Billet de la Réserve fédérale &middot; Monnaie de réserve mondiale depuis 1944', sr: 'fr-FR',
       intro: 'Bonjour à tous. Je suis le dollar américain. Je parcours le monde depuis 1944, et il paraît que certains d’entre vous ont des questions sur mon avenir, et sur mes amis des BRICS. Je vous écoute.' },
     en: { ask: '&#127908; Ask a question', listen: '&#9679; Listening… tap to send', busy: '&#8230; Thinking', ph: 'Type a question for Mr. Dollar…', send: 'Ask',
       thinking: 'Mr. Dollar is thinking…', listening: 'Listening…', noSR: 'Voice input needs Chrome, Edge or Safari. Type here instead…',
       blocked: 'Microphone blocked. Allow the mic in the address bar, or type your question.', noSpeech: 'I didn’t catch that. Tap the button and try again.',
-      oops: 'Forgive me, my thoughts seem to have got lost in transit. Could you ask me that once more?', speak: '&#9654; Hear him speak', close: '&#128269; Close-up',
+      oops: 'Forgive me, my thoughts seem to have got lost in transit. Could you ask me that once more?', speak: '&#9654; Hear him speak', full: '&#x26F6; Full screen', exitFull: '&#x2715; Exit full screen', close: '&#128269; Close-up',
       tag: 'Federal Reserve Note &middot; World Reserve Currency since 1944', sr: 'en-US',
       intro: 'Good day, everyone. I’m the US dollar. I’ve been travelling the world since 1944, and I hear some of you have questions about my future, and my friends in BRICS. Ask away.' }
   };
@@ -48,7 +48,13 @@
     @media (max-width:700px){#picks{top:auto;bottom:150px}}
     #picks select{font-family:inherit;font-size:13px;padding:6px 10px;border-radius:20px;border:1px solid rgba(217,178,95,.45);background:rgba(16,15,13,.72);color:#e8dcbc;outline:none;cursor:pointer;opacity:.55;transition:opacity .3s}
     #picks select:hover,#picks select:focus{opacity:1}
-    #picks option{background:#16140f;color:#f1ead6}`;
+    #picks option{background:#16140f;color:#f1ead6}
+    #fs{position:fixed;right:14px;bottom:14px;z-index:21;font-family:inherit;font-size:13px;padding:7px 12px;border-radius:20px;border:1px solid rgba(217,178,95,.45);background:rgba(16,15,13,.72);color:#e8dcbc;cursor:pointer;opacity:.55;transition:opacity .3s}
+    #fs:hover{opacity:1}
+    @media (max-width:700px){#fs{bottom:auto;top:14px}}
+    body.full #picks{display:none}
+    body.full #fs{opacity:.25}
+    body.full #fs:hover{opacity:1}`;
 
   function setSub(text, show = true) { sub.textContent = text; sub.style.opacity = show ? 1 : 0; }
   function setQ(text) { const q = D.getElementById('qline'); q.textContent = text ? '“' + text + '”' : ''; q.style.opacity = text ? 1 : 0; }
@@ -365,11 +371,28 @@
     D.documentElement.lang = lang;
     D.getElementById('speak').innerHTML = T().speak;
     D.getElementById('close').innerHTML = T().close;
+    syncFull();
     const tag = D.querySelector('.ui p'); if (tag) tag.innerHTML = T().tag;
     input.placeholder = T().ph; sendBtn.textContent = T().send;
     setBtn(busy ? 'busy' : 'idle');
     if (listening) stopListening();
   }
+
+  // ---- full screen (whole page, so the browser bars disappear) ----
+  const isFull = () => !!(document.fullscreenElement || document.webkitFullscreenElement);
+  function toggleFull() {
+    const el = document.documentElement;
+    if (isFull()) (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    else { const go = el.requestFullscreen || el.webkitRequestFullscreen; if (go) { const p = go.call(el); if (p && p.catch) p.catch(() => {}); } }
+  }
+  function syncFull() {
+    const b = D && D.getElementById('fs'); if (!b) return;
+    const on = isFull();
+    b.innerHTML = on ? T().exitFull : T().full;
+    D.body.classList.toggle('full', on);
+  }
+  document.addEventListener('fullscreenchange', syncFull);
+  document.addEventListener('webkitfullscreenchange', syncFull);
 
   function wire() {
     W = frame.contentWindow; D = frame.contentDocument;
@@ -387,9 +410,13 @@
     form.addEventListener('submit', e => { e.preventDefault(); const q = input.value; input.value = ''; input.blur(); ask(q); });
     askBtn.addEventListener('click', () => listening ? stopListening() : startListening());
     D.getElementById('speak').style.display = 'none';   // "L'entendre parler" button removed from the page
+    const fs = D.createElement('button'); fs.id = 'fs'; fs.type = 'button';
+    fs.addEventListener('click', () => { fs.blur(); toggleFull(); });
+    if (document.fullscreenEnabled || document.webkitFullscreenEnabled) D.body.appendChild(fs);
     applyLang();
     const typing = e => { const t = (e.target && e.target.tagName) || ''; return t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT'; };
     const key = e => {
+      if (e.code === 'KeyF' && e.type === 'keydown' && !typing(e) && !e.ctrlKey && !e.metaKey && !e.altKey) { e.preventDefault(); toggleFull(); return; }
       if (e.code !== 'Space' || typing(e)) return;
       e.preventDefault(); e.stopPropagation();          // Space must never also "click" a focused button (e.g. the intro)
       if (e.type === 'keydown' && !e.repeat) listening ? stopListening() : startListening();
