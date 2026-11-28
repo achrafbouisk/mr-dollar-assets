@@ -240,7 +240,7 @@
   const VOICES = [['Charon', 'Voix : Charon – grave, posée'], ['Gacrux', 'Voix : Gacrux – mûre'], ['Algenib', 'Voix : Algenib – rocailleuse'], ['Orus', 'Voix : Orus – ferme'], ['Sadaltager', 'Voix : Sadaltager – savante'], ['Iapetus', 'Voix : Iapetus – claire'], ['Rasalgethi', 'Voix : Rasalgethi – narrateur'], ['oa-cedar', 'OpenAI : Cedar – naturelle'], ['oa-ash', 'OpenAI : Ash – posée'], ['oa-ballad', 'OpenAI : Ballad – chaleureuse'], ['oa-echo', 'OpenAI : Echo – claire'], ['oa-verse', 'OpenAI : Verse – expressive'], ['oa-onyx', 'OpenAI : Onyx – très grave'], ['browser', 'Voix du navigateur (hors ligne)']];
   const BRAINS = [['gemini', 'Cerveau : Google Gemini'], ['openai', 'Cerveau : OpenAI']];
   let brain = 'openai', keys = { gemini: true, openai: false };
-  try { const b = localStorage.getItem('mrDollarBrain'); if (BRAINS.some(x => x[0] === b)) brain = b; } catch (e) {}
+  try { const b = localStorage.getItem('mrDollarBrain2'); if (BRAINS.some(x => x[0] === b)) brain = b; } catch (e) {}
   const PRON = {
     en: [[/\bBRICS\+/g, 'Bricks plus'], [/\bBRICS\b/g, 'Bricks'], [/\bSWIFT\b/g, 'Swift'], [/\bOPEC\b/g, 'Oh-peck'], [/\bUSD\b/g, 'U.S. dollar'], [/\bUS\b/g, 'U.S.'], [/\bIMF\b/g, 'I.M.F.'], [/\bGDP\b/g, 'G.D.P.']],
     fr: [[/\bBRICS\s?\+/g, 'Brics plus'], [/\bBRICS\b/g, 'Brics'], [/\bOPEP\b/g, 'Opep'], [/\bOPEC\b/g, 'Opep'], [/\bSWIFT\b/g, 'Swift'], [/\bUSD\b/g, 'dollars américains'], [/\bMr\.? Dollar\b/g, 'Monsieur Dollar']]
@@ -402,7 +402,7 @@
     pick.addEventListener('change', () => { voice = pick.value; try { localStorage.setItem('mrDollarVoice2', voice); } catch (e) {} prefetchFillers(); });
     const bp = D.createElement('select'); bp.id = 'brainpick'; bp.title = "Mr. Dollar's brain";
     bp.innerHTML = BRAINS.map(opt).join(''); bp.value = brain;
-    bp.addEventListener('change', () => { brain = bp.value; try { localStorage.setItem('mrDollarBrain', brain); } catch (e) {} });
+    bp.addEventListener('change', () => { brain = bp.value; try { localStorage.setItem('mrDollarBrain2', brain); } catch (e) {} });
     box.appendChild(bp); box.appendChild(pick);
     // grey out OpenAI until its key is configured on the server
     fetch('/api/ask?status=1').then(r => r.json()).then(k => {
