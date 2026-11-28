@@ -238,14 +238,14 @@
   // ---------- Mr. Dollar's voice: Gemini TTS behind a speechSynthesis look-alike ----------
   const VOICES = [['Charon', 'Voix : Charon – grave, posée'], ['Gacrux', 'Voix : Gacrux – mûre'], ['Algenib', 'Voix : Algenib – rocailleuse'], ['Orus', 'Voix : Orus – ferme'], ['Sadaltager', 'Voix : Sadaltager – savante'], ['Iapetus', 'Voix : Iapetus – claire'], ['Rasalgethi', 'Voix : Rasalgethi – narrateur'], ['oa-onyx', 'OpenAI : Onyx – grave'], ['oa-ash', 'OpenAI : Ash – posée'], ['oa-ballad', 'OpenAI : Ballad – chaleureuse'], ['oa-echo', 'OpenAI : Echo – claire'], ['oa-verse', 'OpenAI : Verse – expressive'], ['browser', 'Voix du navigateur (hors ligne)']];
   const BRAINS = [['gemini', 'Cerveau : Google Gemini'], ['openai', 'Cerveau : OpenAI']];
-  let brain = 'gemini', keys = { gemini: true, openai: false };
+  let brain = 'openai', keys = { gemini: true, openai: false };
   try { const b = localStorage.getItem('mrDollarBrain'); if (BRAINS.some(x => x[0] === b)) brain = b; } catch (e) {}
   const PRON = {
     en: [[/\bBRICS\+/g, 'Bricks plus'], [/\bBRICS\b/g, 'Bricks'], [/\bSWIFT\b/g, 'Swift'], [/\bOPEC\b/g, 'Oh-peck'], [/\bUSD\b/g, 'U.S. dollar'], [/\bUS\b/g, 'U.S.'], [/\bIMF\b/g, 'I.M.F.'], [/\bGDP\b/g, 'G.D.P.']],
     fr: [[/\bBRICS\s?\+/g, 'Brics plus'], [/\bBRICS\b/g, 'Brics'], [/\bOPEP\b/g, 'Opep'], [/\bOPEC\b/g, 'Opep'], [/\bSWIFT\b/g, 'Swift'], [/\bUSD\b/g, 'dollars américains'], [/\bMr\.? Dollar\b/g, 'Monsieur Dollar']]
   };
   const fixPron = t => PRON[lang].reduce((s, [a, b]) => s.replace(a, b), t);
-  let voice = 'Charon';
+  let voice = 'oa-onyx';
   try { const v = localStorage.getItem('mrDollarVoice'); if (VOICES.some(x => x[0] === v)) voice = v; } catch (e) {}
   let actx = null;
   function audioCtx() {
